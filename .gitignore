@@ -1,0 +1,20 @@
+# Virtual environments
+.venv/
+.venv312/
+venv/
+env/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS / editor cruft
+.DS_Store
+
+# Tooling
+.claude/
+.playwright-mcp/
+
+# Logs
+*.log
