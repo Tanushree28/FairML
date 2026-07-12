@@ -59,9 +59,10 @@ def _load_german_frame():
     return data[features], data["risk"], "Sex"
 
 
-def load_dataset(name):
+def load_dataset(name, seed=42):
     """Returns a dict with torch tensors, numpy arrays, sensitive-feature
-    series, and integer group ids for train/val/test."""
+    series, and integer group ids for train/val/test. `seed` controls the
+    train/val/test split."""
     if name == "compas":
         X, y, sensitive_col = _load_compas_frame()
         label = "COMPAS (sensitive attribute: race)"
@@ -71,8 +72,8 @@ def load_dataset(name):
     else:
         raise ValueError(f"Unknown dataset: {name}")
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.25, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
+    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.25, random_state=seed)
 
     sens = {
         "train": X_train[sensitive_col].reset_index(drop=True),
