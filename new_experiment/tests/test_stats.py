@@ -50,3 +50,17 @@ def test_load_seed_csvs_reads_seed_dirs(tmp_path):
 def test_load_seed_csvs_raises_when_empty(tmp_path):
     with pytest.raises(FileNotFoundError):
         load_seed_csvs("nope", "model_comparison", results_root=tmp_path)
+
+
+def test_significance_zero_diff_returns_p1():
+    rows = []
+    for seed in range(6):
+        for fam in ("base", "fair"):
+            row = {"Family": fam, "Seed": seed}
+            for m in METRICS:
+                row[m] = 0.5          # identical -> diff is exactly zero
+            rows.append(row)
+    df = pd.DataFrame(rows)
+    sig = significance_vs_baseline(df, "fair", "base")
+    assert (sig["p"] == 1.0).all()
+    assert (sig["p_holm"] == 1.0).all()
