@@ -1,0 +1,10 @@
+Model,Family,Seed,Alpha,Beta,Accuracy,Demographic Parity Difference,DPD (Largest 2 Groups),Equalized Odds Difference,Theil Index,Gini Coefficient
+Logistic Regression baseline (BCE only),Logistic Regression baseline,3,1.0,0.0,0.8422,0.1813,0.1813,0.0814,0.0849,0.7928
+"Fair Logistic Regression (α=0.5, β=0.5)",Fair Logistic Regression,3,0.5,0.5,0.8268,0.0079,0.0079,0.3303,0.0967,0.8169
+MLP (64-64) baseline (BCE only),MLP (64-64) baseline,3,1.0,0.0,0.8481,0.1801,0.1801,0.077,0.0814,0.7905
+"Fair MLP (64-64) (α=0.5, β=0.5)",Fair MLP (64-64),3,0.5,0.5,0.8349,0.0133,0.0133,0.3444,0.0915,0.8129
+ExpGrad LogReg (Demographic Parity),ExpGrad LogReg (Demographic Parity),3,,,0.8296,0.0139,0.0139,0.3242,0.0957,0.8218
+ExpGrad LogReg (Equalized Odds),ExpGrad LogReg (Equalized Odds),3,,,0.837,0.1068,0.1068,0.0615,0.0898,0.8086
+ThresholdOptimizer LogReg (Demographic Parity),ThresholdOptimizer LogReg (Demographic Parity),3,,,0.8263,0.0055,0.0055,0.3593,0.0969,0.8167
+Reweighing LogReg (Kamiran-Calders),Reweighing LogReg (Kamiran-Calders),3,,,0.8385,0.0914,0.0914,0.1636,0.0881,0.8019
+Random Forest (no fairness),Random Forest (no fairness),3,,,0.8407,0.1892,0.1892,0.0954,0.084,0.7802
