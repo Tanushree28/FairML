@@ -177,15 +177,15 @@ def run_sweep(ds, arch_key, model_dir, args, seed):
             "Arch": arch_key,
             "Alpha": alpha,
             "Beta": beta,
+            "Seed": seed,
             **{k: round(v, 4) for k, v in test_metrics.items()},
+            "Soft DP": round(soft_dp, 4),
+            "Soft GE": round(soft_ge, 4),
             "Val Accuracy": round(val_acc, 4),
             "Val DPD (Largest 2 Groups)": round(val_dpd2, 4),
             "Val Positive Rate": round(float(y_pred_val.mean()), 4),
             "Train Time (s)": round(elapsed, 3),
             "Trained This Run": trained,
-            "Seed": seed,
-            "Soft DP": round(soft_dp, 4),
-            "Soft GE": round(soft_ge, 4),
         })
         print(f"  [{arch_key} {i}/{len(combos)}] alpha={alpha}, beta={beta} "
               f"-> {'trained' if trained else 'loaded'} in {elapsed:.2f}s | "
