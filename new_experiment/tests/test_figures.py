@@ -92,3 +92,11 @@ def test_fig3_and_tables_write_outputs(tmp_path):
     assert len(t2) == 8            # 2 archs x 4 variants
     assert (tmp_path / "table1_master_comparison.tex").exists()
     assert (tmp_path / "table2_ablation.tex").exists()
+
+
+def test_supplementary_assets_write(tmp_path):
+    from analysis.figures import seed_mean_heatmaps, surrogate_scatter
+    root = _fake_sweep_dir(tmp_path)
+    paths = seed_mean_heatmaps("german", tmp_path, results_root=root)
+    assert len(paths) == 6 and all(p.exists() for p in paths)   # 2 archs x 3 metrics
+    assert surrogate_scatter("german", tmp_path, results_root=root).exists()

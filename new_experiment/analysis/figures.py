@@ -209,3 +209,47 @@ def ablation_table(dataset, out_dir, results_root=RESULTS):
     df.to_csv(Path(out_dir) / "table2_ablation.csv", index=False)
     (Path(out_dir) / "table2_ablation.tex").write_text(df.to_latex(index=False))
     return df
+
+
+HEATMAP_METRICS = ["Accuracy", DPD2, "Theil Index"]
+
+
+def seed_mean_heatmaps(dataset, out_dir, results_root=RESULTS):
+    sweep = load_seed_csvs(dataset, "sweep_results", results_root)
+    paths = []
+    for arch in ["logreg", "mlp"]:
+        g = sweep[sweep["Arch"] == arch]
+        for metric in HEATMAP_METRICS:
+            pv = g.pivot_table(index="Alpha", columns="Beta", values=metric, aggfunc="mean")
+            plt.figure(figsize=(8, 6))
+            sns.heatmap(pv, annot=True, fmt=".3f",
+                        cmap="viridis" if metric == "Accuracy" else "coolwarm",
+                        cbar_kws={"label": f"{metric} (test, seed mean)"})
+            plt.title(f"{metric} (mean over seeds) — {ARCH_LABELS[arch]} — {dataset}")
+            plt.xlabel("β")
+            plt.ylabel("α")
+            plt.tight_layout()
+            out = Path(out_dir) / f"heatmap_{arch}_{metric.replace(' ', '_')}.png"
+            plt.savefig(out, dpi=150)
+            plt.close()
+            paths.append(out)
+    return paths
+
+
+def surrogate_scatter(dataset, out_dir, results_root=RESULTS):
+    """Does the differentiable training surrogate track the hard eval metric?"""
+    sweep = load_seed_csvs(dataset, "sweep_results", results_root)
+    pairs = [("Soft DP", DPD2), ("Soft GE", "Theil Index")]
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.6))
+    for ax, (soft, hard) in zip(axes, pairs):
+        ax.scatter(sweep[soft], sweep[hard], s=10, alpha=0.35)
+        r = np.corrcoef(sweep[soft], sweep[hard])[0, 1]
+        ax.set_xlabel(f"{soft} (training surrogate)")
+        ax.set_ylabel(f"{hard} (evaluation metric)")
+        ax.set_title(f"Pearson r = {r:.3f}")
+    fig.suptitle(f"Surrogate vs. hard metric — {dataset} (all sweep points, all seeds)")
+    fig.tight_layout()
+    out = Path(out_dir) / "supp_surrogate_validation.png"
+    fig.savefig(out, dpi=200)
+    plt.close(fig)
+    return out
