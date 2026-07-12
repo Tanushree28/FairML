@@ -145,15 +145,18 @@ def plot_fair_vs_baseline(dataset, out_dir, results_root=RESULTS):
     x = np.arange(len(PAIRS))
     width = 0.38
     for ax, metric in zip(axes, FIG3_METRICS):
+        tops = np.zeros(len(PAIRS))
         for k, kind in enumerate(["baseline", "fair"]):
             fams = [p[k] for p in PAIRS]
-            mean = [comp.loc[comp["Family"] == f, metric].mean() for f in fams]
-            std = [comp.loc[comp["Family"] == f, metric].std() for f in fams]
+            mean = np.array([comp.loc[comp["Family"] == f, metric].mean() for f in fams])
+            std = np.nan_to_num(np.array([comp.loc[comp["Family"] == f, metric].std() for f in fams]))
             ax.bar(x + (k - 0.5) * width, mean, width, yerr=std, capsize=3,
                    label=kind if metric == FIG3_METRICS[0] else None)
+            tops = np.maximum(tops, mean + std)
+        ax.set_ylim(0, tops.max() * 1.22)
         for i, (bf, ff) in enumerate(PAIRS):
-            top = comp.loc[comp["Family"].isin([bf, ff]), metric].max()
-            ax.text(i, top * 1.04, stars(sig[ff][metric]), ha="center", fontsize=11)
+            ax.text(i, tops[i] + tops.max() * 0.04, stars(sig[ff][metric]),
+                    ha="center", fontsize=11)
         ax.set_xticks(x)
         ax.set_xticklabels(["LogReg", "MLP"])
         ax.set_title(metric, fontsize=10)

@@ -85,12 +85,15 @@ def test_fig3_and_tables_write_outputs(tmp_path):
     from analysis.figures import ablation_table, master_table, plot_fair_vs_baseline
     root = _fake_comparison_dir(tmp_path)
     _fake_sweep_dir(tmp_path, n_seeds=6)
-    assert plot_fair_vs_baseline("german", tmp_path, results_root=root).exists()
+    fig3 = plot_fair_vs_baseline("german", tmp_path, results_root=root)
+    assert fig3.exists() and fig3.stat().st_size > 0
     t1 = master_table("german", tmp_path, results_root=root)
     assert "±" in t1[METRICS[0]].iloc[0]
     t2 = ablation_table("german", tmp_path, results_root=root)
     assert len(t2) == 8            # 2 archs x 4 variants
+    assert (tmp_path / "table1_master_comparison.csv").exists()
     assert (tmp_path / "table1_master_comparison.tex").exists()
+    assert (tmp_path / "table2_ablation.csv").exists()
     assert (tmp_path / "table2_ablation.tex").exists()
 
 
