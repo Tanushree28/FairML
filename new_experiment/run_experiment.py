@@ -11,19 +11,20 @@ What it runs per dataset:
        - fairlearn ThresholdOptimizer (post-processing, Demographic Parity)
        - Random Forest (accuracy reference, no fairness intervention)
 
-Outputs (always rewritten, no stale-CSV caching):
-  new_experiment/RESULTS/<dataset>/sweep_results.csv
-  new_experiment/RESULTS/<dataset>/model_comparison.csv
-  new_experiment/RESULTS/<dataset>/PLOTS/heatmap_<arch>_<metric>.png
-  new_experiment/RESULTS/<dataset>/PLOTS/model_comparison.png
+Outputs (always rewritten, no stale-CSV caching), per dataset and per seed:
+  new_experiment/RESULTS/<dataset>/seed<k>/sweep_results.csv
+  new_experiment/RESULTS/<dataset>/seed<k>/model_comparison.csv
+  new_experiment/RESULTS/<dataset>/seed<k>/PLOTS/heatmap_<arch>_<metric>.png   (single-seed runs only)
+  new_experiment/RESULTS/<dataset>/seed<k>/PLOTS/model_comparison.png         (single-seed runs only)
 
-Model checkpoints are cached in new_experiment/MODELS/<dataset>/ and reused;
-pass --retrain to force retraining.
+Model checkpoints are cached in new_experiment/MODELS/<dataset>/seed<k>/ and
+reused; pass --retrain to force retraining.
 
 Usage:
-  python new_experiment/run_experiment.py                  # COMPAS
+  python new_experiment/run_experiment.py                  # COMPAS, seed 42
   python new_experiment/run_experiment.py --dataset german
-  python new_experiment/run_experiment.py --dataset both
+  python new_experiment/run_experiment.py --dataset both --seeds "0-9"
+  python new_experiment/run_experiment.py --dataset all --seeds "0-2,7"
 """
 
 import argparse
@@ -59,9 +60,23 @@ from IndividualFairness import theil_index, gini_coefficient
 
 from data_loading import load_dataset
 from models import LogisticRegression, MLP, train_model, predict_proba
+from losses import soft_demographic_parity, soft_generalized_entropy
 
 import warnings
 warnings.filterwarnings("ignore")
+
+
+def parse_seeds(spec):
+    """'0-2,7' -> [0, 1, 2, 7]."""
+    seeds = []
+    for part in str(spec).split(","):
+        if "-" in part:
+            a, b = part.split("-")
+            seeds.extend(range(int(a), int(b) + 1))
+        else:
+            seeds.append(int(part))
+    return seeds
+
 
 ALPHA_LIST = [0, 0.005, 0.05, 0.25, 0.5, 0.75, 1]
 BETA_LIST = [0, 0.005, 0.05, 0.25, 0.5, 0.75, 1]
@@ -114,7 +129,7 @@ def evaluate_predictions(y_true, y_pred, sensitive_features):
     }
 
 
-def run_sweep(ds, arch_key, model_dir, args):
+def run_sweep(ds, arch_key, model_dir, args, seed):
     arch_label, arch_cls = ARCHITECTURES[arch_key]
     rows = []
     combos = list(product(ALPHA_LIST, BETA_LIST))
@@ -122,8 +137,8 @@ def run_sweep(ds, arch_key, model_dir, args):
 
     for i, (alpha, beta) in enumerate(combos, 1):
         ckpt = model_dir / f"{arch_key}_alpha_{alpha}_beta_{beta}.pth"
-        torch.manual_seed(42)
-        np.random.seed(42)
+        torch.manual_seed(seed)
+        np.random.seed(seed)
         model = arch_cls(ds["input_dim"])
 
         t0 = time.perf_counter()
@@ -142,8 +157,14 @@ def run_sweep(ds, arch_key, model_dir, args):
             trained = True
         elapsed = time.perf_counter() - t0
 
-        y_pred_test = (predict_proba(model, ds["X_test_t"]) >= 0.5).astype(int)
+        probs_test = predict_proba(model, ds["X_test_t"])
+        y_pred_test = (probs_test >= 0.5).astype(int)
         y_pred_val = (predict_proba(model, ds["X_val_t"]) >= 0.5).astype(int)
+
+        probs_t = torch.tensor(probs_test, dtype=torch.float32)
+        y_true_t = torch.tensor(np.asarray(ds["y_test"], dtype=np.float32))
+        soft_dp = float(soft_demographic_parity(probs_t, ds["group_ids"]["test"]))
+        soft_ge = float(soft_generalized_entropy(probs_t, y_true_t))
 
         test_metrics = evaluate_predictions(ds["y_test"], y_pred_test, ds["sens"]["test"])
         val_acc = accuracy_score(ds["y_val"], y_pred_val)
@@ -162,6 +183,9 @@ def run_sweep(ds, arch_key, model_dir, args):
             "Val Positive Rate": round(float(y_pred_val.mean()), 4),
             "Train Time (s)": round(elapsed, 3),
             "Trained This Run": trained,
+            "Seed": seed,
+            "Soft DP": round(soft_dp, 4),
+            "Soft GE": round(soft_ge, 4),
         })
         print(f"  [{arch_key} {i}/{len(combos)}] alpha={alpha}, beta={beta} "
               f"-> {'trained' if trained else 'loaded'} in {elapsed:.2f}s | "
@@ -187,14 +211,14 @@ def pick_best_fair(sweep_df):
     return fair.sort_values("dist").iloc[0]
 
 
-def run_fairlearn_baselines(ds):
+def run_fairlearn_baselines(ds, seed):
     """ExponentiatedGradient (DP / EO), ThresholdOptimizer, RandomForest."""
     rows = []
     X_tr, y_tr, s_tr = ds["X_train"], ds["y_train"], ds["sens"]["train"]
     X_te, s_te = ds["X_test"], ds["sens"]["test"]
 
     def add(name, y_pred):
-        rows.append({"Model": name,
+        rows.append({"Model": name, "Family": name, "Seed": seed,
                      **{k: round(v, 4) for k, v in
                         evaluate_predictions(ds["y_test"], y_pred, s_te).items()}})
         print(f"  {name}: done")
@@ -202,21 +226,21 @@ def run_fairlearn_baselines(ds):
     eg_dp = ExponentiatedGradient(SkLogisticRegression(max_iter=1000),
                                   constraints=DemographicParity())
     eg_dp.fit(X_tr, y_tr, sensitive_features=s_tr)
-    add("ExpGrad LogReg (Demographic Parity)", eg_dp.predict(X_te, random_state=42))
+    add("ExpGrad LogReg (Demographic Parity)", eg_dp.predict(X_te, random_state=seed))
 
     eg_eo = ExponentiatedGradient(SkLogisticRegression(max_iter=1000),
                                   constraints=EqualizedOdds())
     eg_eo.fit(X_tr, y_tr, sensitive_features=s_tr)
-    add("ExpGrad LogReg (Equalized Odds)", eg_eo.predict(X_te, random_state=42))
+    add("ExpGrad LogReg (Equalized Odds)", eg_eo.predict(X_te, random_state=seed))
 
     thr = ThresholdOptimizer(estimator=SkLogisticRegression(max_iter=1000),
                              constraints="demographic_parity",
                              predict_method="predict_proba", prefit=False)
     thr.fit(X_tr, y_tr, sensitive_features=s_tr)
     add("ThresholdOptimizer LogReg (Demographic Parity)",
-        thr.predict(X_te, sensitive_features=s_te, random_state=42))
+        thr.predict(X_te, sensitive_features=s_te, random_state=seed))
 
-    rf = RandomForestClassifier(n_estimators=300, random_state=42)
+    rf = RandomForestClassifier(n_estimators=300, random_state=seed)
     rf.fit(X_tr, y_tr)
     add("Random Forest (no fairness)", rf.predict(X_te))
 
@@ -269,20 +293,20 @@ def plot_comparison(comparison_df, ds, plots_dir):
     print(f"  Comparison chart written to {out}")
 
 
-def run_dataset(name, args):
-    print(f"\n{'=' * 70}\nDataset: {name}\n{'=' * 70}")
-    ds = load_dataset(name)
+def run_dataset(name, args, seed):
+    print(f"\n{'=' * 70}\nDataset: {name} | seed {seed}\n{'=' * 70}")
+    ds = load_dataset(name, seed=seed)
     print(f"  {ds['label']} | input_dim={ds['input_dim']} | "
           f"train/val/test = {len(ds['y_train'])}/{len(ds['y_val'])}/{len(ds['y_test'])}")
 
-    model_dir = HERE / "MODELS" / name
-    results_dir = HERE / "RESULTS" / name
+    model_dir = HERE / "MODELS" / name / f"seed{seed}"
+    results_dir = HERE / "RESULTS" / name / f"seed{seed}"
     plots_dir = results_dir / "PLOTS"
     model_dir.mkdir(parents=True, exist_ok=True)
     plots_dir.mkdir(parents=True, exist_ok=True)
 
     # --- Alpha x Beta sweep per architecture ---------------------------------
-    sweep_df = pd.concat([run_sweep(ds, arch, model_dir, args) for arch in ARCHITECTURES],
+    sweep_df = pd.concat([run_sweep(ds, arch, model_dir, args, seed) for arch in ARCHITECTURES],
                          ignore_index=True)
     sweep_csv = results_dir / "sweep_results.csv"
     sweep_df.to_csv(sweep_csv, index=False)
@@ -294,15 +318,19 @@ def run_dataset(name, args):
         arch_df = sweep_df[sweep_df["Arch"] == arch_key]
         baseline = arch_df[(arch_df["Alpha"] == 1) & (arch_df["Beta"] == 0)].iloc[0]
         comparison_rows.append({"Model": f"{arch_label} baseline (BCE only)",
+                                "Family": f"{arch_label} baseline",
+                                "Seed": seed, "Alpha": 1, "Beta": 0,
                                 **{m: baseline[m] for m in METRICS}})
 
         best = pick_best_fair(arch_df)
         comparison_rows.append({
             "Model": f"Fair {arch_label} (α={best['Alpha']}, β={best['Beta']})",
+            "Family": f"Fair {arch_label}",
+            "Seed": seed, "Alpha": best["Alpha"], "Beta": best["Beta"],
             **{m: best[m] for m in METRICS}})
 
-    print("  Running fairlearn baselines (ExpGrad, ThresholdOptimizer, RandomForest)...")
-    comparison_rows.extend(run_fairlearn_baselines(ds))
+    print("  Running baselines (ExpGrad, ThresholdOptimizer, RandomForest)...")
+    comparison_rows.extend(run_fairlearn_baselines(ds, seed))
 
     comparison_df = pd.DataFrame(comparison_rows)
     comparison_csv = results_dir / "model_comparison.csv"
@@ -310,25 +338,33 @@ def run_dataset(name, args):
     print(f"  Comparison table written to {comparison_csv}")
     print("\n" + comparison_df.to_string(index=False))
 
-    # --- Plots ----------------------------------------------------------------
-    plot_heatmaps(sweep_df, ds, plots_dir)
-    plot_comparison(comparison_df, ds, plots_dir)
+    # --- Plots (ad-hoc single-seed runs only; paper figures come from analysis/) ---
+    if len(args.seed_list) == 1:
+        plot_heatmaps(sweep_df, ds, plots_dir)
+        plot_comparison(comparison_df, ds, plots_dir)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Fixed fairness-loss experiment + model comparison")
-    parser.add_argument("--dataset", choices=["compas", "german", "both"], default="compas")
+    parser.add_argument("--dataset", choices=["compas", "german", "adult", "both", "all"],
+                        default="compas")
+    parser.add_argument("--seeds", default="42",
+                        help="comma list / ranges, e.g. '0-9' or '0-2,7'")
     parser.add_argument("--retrain", action="store_true",
                         help="retrain even if a checkpoint exists in MODELS/")
     parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--patience", type=int, default=20,
                         help="early-stopping patience on validation loss")
     args = parser.parse_args()
+    args.seed_list = parse_seeds(args.seeds)
 
-    datasets = ["compas", "german"] if args.dataset == "both" else [args.dataset]
+    dataset_map = {"both": ["compas", "german"],
+                   "all": ["compas", "german", "adult"]}
+    datasets = dataset_map.get(args.dataset, [args.dataset])
     start = time.perf_counter()
     for name in datasets:
-        run_dataset(name, args)
+        for seed in args.seed_list:
+            run_dataset(name, args, seed)
     print(f"\nTotal time: {time.perf_counter() - start:.1f}s")
 
 
