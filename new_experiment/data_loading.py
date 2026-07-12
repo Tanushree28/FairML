@@ -1,9 +1,10 @@
 """Dataset loading for the new experiment.
 
-Mirrors the original Compas.py / German.py exactly: same features, same
-60/20/20 train/val/test split (random_state=42), same
-StandardScaler + OneHotEncoder(drop='first') preprocessing — so numbers are
-directly comparable with the original sweep.
+Loads COMPAS and German Credit datasets with 60/20/20 train/val/test split
+(seed-parameterized; default 42) and StandardScaler + OneHotEncoder(drop='first')
+preprocessing. COMPAS now uses ProPublica's standard row filters and feature set
+(excluding the label-leaking duration feature), so it no longer mirrors the
+original Compas.py exactly.
 
 The COMPAS CSV is cached to data/compas-scores-two-years.csv after the first
 download so re-runs work offline.
@@ -32,9 +33,20 @@ def _load_compas_frame():
         COMPAS_CACHE.parent.mkdir(parents=True, exist_ok=True)
         data.to_csv(COMPAS_CACHE, index=False)
 
-    data["duration"] = data["end"] - data["start"]
-    features = ["age", "juv_fel_count", "juv_misd_count", "juv_other_count",
-                "priors_count", "c_charge_degree", "race", "sex", "duration"]
+    # ProPublica's standard row filters (github.com/propublica/compas-analysis).
+    # NOTE: the previous version added duration = end - start, which correlates
+    # -0.78 with the label for mechanical reasons (re-offending truncates the
+    # observation window) — label leakage, removed for the paper.
+    data = data[
+        (data["days_b_screening_arrest"] <= 30)
+        & (data["days_b_screening_arrest"] >= -30)
+        & (data["is_recid"] != -1)
+        & (data["c_charge_degree"] != "O")
+        & (data["score_text"] != "N/A")
+    ]
+
+    features = ["age", "sex", "juv_fel_count", "juv_misd_count",
+                "juv_other_count", "priors_count", "c_charge_degree", "race"]
     return data[features], data["two_year_recid"], "race"
 
 
