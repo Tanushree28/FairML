@@ -30,3 +30,14 @@ def test_compas_has_no_duration_feature():
     X, y, sens = _load_compas_frame()
     assert "duration" not in X.columns
     assert sens == "race"
+
+
+def test_adult_loads_with_sex_sensitive():
+    ds = load_dataset("adult", seed=0)
+    assert ds["sensitive_col"] == "sex"
+    total = len(ds["y_train"]) + len(ds["y_val"]) + len(ds["y_test"])
+    assert 40000 < total < 49000          # 48842 rows minus missing-value rows
+    assert set(ds["y_test"].unique()) <= {0, 1}
+    from data_loading import _load_adult_frame
+    X, y, sens = _load_adult_frame()
+    assert "fnlwgt" not in X.columns      # sampling weight, standard exclusion

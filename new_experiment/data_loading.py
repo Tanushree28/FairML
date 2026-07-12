@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 COMPAS_URL = "https://raw.githubusercontent.com/propublica/compas-analysis/master/compas-scores-two-years.csv"
 COMPAS_CACHE = ROOT / "data" / "compas-scores-two-years.csv"
+ADULT_CACHE = ROOT / "data" / "adult.csv"
 
 
 def _load_compas_frame():
@@ -71,6 +72,29 @@ def _load_german_frame():
     return data[features], data["risk"], "Sex"
 
 
+def _load_adult_frame():
+    """Adult Census Income (OpenML 'adult' v2, the 48842-row two-file version).
+
+    Positive class: income > 50K. Sensitive attribute: sex. `fnlwgt` is a
+    census sampling weight, not a person-level feature — standard exclusion;
+    `education` is dropped in favor of the ordinal `education-num`.
+    """
+    if ADULT_CACHE.exists():
+        data = pd.read_csv(ADULT_CACHE)
+    else:
+        from sklearn.datasets import fetch_openml
+        raw = fetch_openml("adult", version=2, as_frame=True)
+        raw.frame.to_csv(ADULT_CACHE, index=False)
+        data = pd.read_csv(ADULT_CACHE)   # re-read so dtypes match the cached path
+
+    data = data.replace("?", np.nan).dropna()
+    y = (data["class"].astype(str).str.strip() == ">50K").astype(int).rename("income_gt_50k")
+    features = ["age", "workclass", "education-num", "marital-status", "occupation",
+                "relationship", "race", "sex", "capital-gain", "capital-loss",
+                "hours-per-week", "native-country"]
+    return data[features], y, "sex"
+
+
 def load_dataset(name, seed=42):
     """Returns a dict with torch tensors, numpy arrays, sensitive-feature
     series, and integer group ids for train/val/test. `seed` controls the
@@ -81,6 +105,9 @@ def load_dataset(name, seed=42):
     elif name == "german":
         X, y, sensitive_col = _load_german_frame()
         label = "German Credit (sensitive attribute: sex)"
+    elif name == "adult":
+        X, y, sensitive_col = _load_adult_frame()
+        label = "Adult Census Income (sensitive attribute: sex)"
     else:
         raise ValueError(f"Unknown dataset: {name}")
 
