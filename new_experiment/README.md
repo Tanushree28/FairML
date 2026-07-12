@@ -46,10 +46,12 @@ From the repo root (`FairML/`):
 
 ## Outputs
 
+Everything lands under `new_experiment/`:
+
 ```
-MODELS/<dataset>/seed<k>/            cached .pth checkpoints
-RESULTS/<dataset>/seed<k>/           sweep_results.csv, model_comparison.csv
-RESULTS/paper/<dataset>/             fig1_pareto, fig2_beta_cross_effect,
+new_experiment/MODELS/<dataset>/seed<k>/    cached .pth checkpoints
+new_experiment/RESULTS/<dataset>/seed<k>/   sweep_results.csv, model_comparison.csv
+new_experiment/RESULTS/paper/<dataset>/     fig1_pareto, fig2_beta_cross_effect,
                                      fig2b_dpd_vs_theil, fig3_fair_vs_baseline,
                                      table1/table2 (csv + tex), heatmaps,
                                      supp_surrogate_validation

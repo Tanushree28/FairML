@@ -31,8 +31,8 @@ loss (`losses.py`: α·BCE + (1−α)·[β·SoftDP + (1−β)·SoftGE]), LR + ML
 (`models.py`), three datasets (`data_loading.py`: COMPAS [ProPublica
 standard features, no duration leakage], German Credit, Adult), reweighing
 baseline (`baselines.py`), per-seed sweep results in
-`RESULTS/<dataset>/seed<k>/`, paper assets via `analysis/` into
-`RESULTS/paper/<dataset>/`.
+`new_experiment/RESULTS/<dataset>/seed<k>/`, paper assets via `analysis/`
+into `new_experiment/RESULTS/paper/<dataset>/`.
 
 Evaluation metrics are imported from the repo root: `GroupFairness.py`,
 `IndividualFairness.py` — keep them there.
