@@ -8,3 +8,4 @@ ExpGrad LogReg (Equalized Odds),ExpGrad LogReg (Equalized Odds),1,,,0.6413,0.134
 ThresholdOptimizer LogReg (Demographic Parity),ThresholdOptimizer LogReg (Demographic Parity),1,,,0.6794,0.3524,0.0533,0.5,0.1879,0.6405
 Reweighing LogReg (Kamiran-Calders),Reweighing LogReg (Kamiran-Calders),1,,,0.668,0.381,0.024,0.5278,0.1947,0.6405
 Random Forest (no fairness),Random Forest (no fairness),1,,,0.6324,0.5238,0.237,0.5633,0.1886,0.566
+XGBoost (no fairness),XGBoost (no fairness),1,,,0.6534,0.4423,0.2796,0.6667,0.1985,0.6259

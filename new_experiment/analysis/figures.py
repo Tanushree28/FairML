@@ -20,6 +20,7 @@ BASELINE_FAMILIES = [
     "ThresholdOptimizer LogReg (Demographic Parity)",
     "Reweighing LogReg (Kamiran-Calders)",
     "Random Forest (no fairness)",
+    "XGBoost (no fairness)",
 ]
 
 
@@ -50,7 +51,7 @@ def plot_pareto(dataset, out_dir, results_root=RESULTS):
                 color=ARCH_COLORS[arch], label=f"{ARCH_LABELS[arch]} Pareto front")
 
     agg = comp.groupby("Family")[["Accuracy", DPD2]].agg(["mean", "std"])
-    markers = ["D", "s", "^", "v", "P"]
+    markers = ["D", "s", "^", "v", "P", "X"]
     for fam, mk in zip(BASELINE_FAMILIES, markers):
         if fam not in agg.index:
             continue
