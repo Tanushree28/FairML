@@ -195,6 +195,8 @@ def ablation_table(dataset, out_dir, results_root=RESULTS):
         mean = g.groupby(["Alpha", "Beta"], as_index=False).mean(numeric_only=True)
         fair = mean[(mean["Alpha"] < 1)
                     & mean["Val Positive Rate"].between(0.05, 0.95)].copy()
+        if fair.empty:
+            raise ValueError("no non-degenerate fair sweep points (all filtered by the positive-rate guard)")
         fair["dist"] = np.sqrt((1 - fair["Val Accuracy"]) ** 2
                                + fair["Val DPD (Largest 2 Groups)"] ** 2)
         best = fair.sort_values("dist").iloc[0]

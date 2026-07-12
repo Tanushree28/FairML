@@ -43,7 +43,8 @@ def significance_vs_baseline(comp_df, family, baseline_family, metrics=METRICS):
     """Paired Wilcoxon signed-rank across seeds, Holm-corrected over `metrics`."""
     a = comp_df[comp_df["Family"] == family].sort_values("Seed")
     b = comp_df[comp_df["Family"] == baseline_family].sort_values("Seed")
-    assert list(a["Seed"]) == list(b["Seed"]), "seed sets must match for a paired test"
+    if list(a["Seed"]) != list(b["Seed"]):
+        raise ValueError("seed sets must match for a paired test")
     pvals = []
     for m in metrics:
         diff = a[m].to_numpy() - b[m].to_numpy()

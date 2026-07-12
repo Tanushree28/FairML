@@ -10,6 +10,8 @@ What it runs per dataset:
        - fairlearn ExponentiatedGradient (Demographic Parity / Equalized Odds)
        - fairlearn ThresholdOptimizer (post-processing, Demographic Parity)
        - Random Forest (accuracy reference, no fairness intervention)
+       - Reweighing (Kamiran & Calders 2012, pre-processing)
+       - XGBoost (accuracy reference, no fairness intervention)
 
 Outputs (always rewritten, no stale-CSV caching), per dataset and per seed:
   new_experiment/RESULTS/<dataset>/seed<k>/sweep_results.csv
@@ -207,6 +209,8 @@ def pick_best_fair(sweep_df):
     fair = sweep_df[(sweep_df["Alpha"] < 1)
                     & (sweep_df["Val Positive Rate"] >= 0.05)
                     & (sweep_df["Val Positive Rate"] <= 0.95)].copy()
+    if fair.empty:
+        raise ValueError("no non-degenerate fair sweep points (all filtered by the positive-rate guard)")
     fair["dist"] = np.sqrt((1.0 - fair["Val Accuracy"]) ** 2
                            + fair["Val DPD (Largest 2 Groups)"] ** 2)
     return fair.sort_values("dist").iloc[0]

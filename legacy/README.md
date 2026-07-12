@@ -11,3 +11,11 @@ contain two known training bugs fixed in `new_experiment/`:
 The COMPAS variant here also uses the leaking `duration = end - start`
 feature (corr −0.78 with the label). The canonical pipeline for the paper
 is `new_experiment/`; see `new_experiment/README.md`.
+
+## dashboard/
+
+The Streamlit dashboard predates the per-seed results layout
+(`new_experiment/RESULTS/<dataset>/seed<k>/`) and reads the old top-level
+CSV paths, so it displays stale data. Archived until it is ported to the
+per-seed layout; use `new_experiment/RESULTS/paper/<dataset>/` assets
+instead.

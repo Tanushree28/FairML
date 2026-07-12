@@ -10,6 +10,7 @@ its BinaryLabelDataset wrapper; the formula is four lines).
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression as SkLogisticRegression
+from xgboost import XGBClassifier
 
 
 def kamiran_calders_weights(y, s):
@@ -29,7 +30,6 @@ def reweighing_logreg(X_train, y_train, s_train, X_test, seed):
 
 
 def xgboost_reference(X_train, y_train, X_test, seed):
-    from xgboost import XGBClassifier
     clf = XGBClassifier(n_estimators=300, max_depth=6, learning_rate=0.1,
                         random_state=seed, eval_metric="logloss")
     clf.fit(X_train, y_train)
