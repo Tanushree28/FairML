@@ -130,7 +130,9 @@ def load_dataset(name, seed=42):
     categorical = X_train.select_dtypes(include=["object", "category"]).columns.tolist()
     preprocessor = ColumnTransformer(transformers=[
         ("num", StandardScaler(), numeric),
-        ("cat", OneHotEncoder(drop="first"), categorical),
+        # handle_unknown="ignore": rare categories (e.g., Adult's 1-row Holand-Netherlands)
+        # may be absent from train in some seeds; encode as all-zeros at transform time.
+        ("cat", OneHotEncoder(drop="first", handle_unknown="ignore"), categorical),
     ])
 
     def densify(M):

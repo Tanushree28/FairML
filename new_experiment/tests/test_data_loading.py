@@ -41,3 +41,10 @@ def test_adult_loads_with_sex_sensitive():
     from data_loading import _load_adult_frame
     X, y, sens = _load_adult_frame()
     assert "fnlwgt" not in X.columns      # sampling weight, standard exclusion
+
+
+def test_adult_seed7_rare_category_does_not_crash():
+    # native-country has a single Holand-Netherlands row; for seed 7 it falls
+    # outside the training split and used to crash the OneHotEncoder.
+    ds = load_dataset("adult", seed=7)
+    assert ds["X_test"].shape[0] == len(ds["y_test"])
