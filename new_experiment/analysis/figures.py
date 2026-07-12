@@ -119,3 +119,93 @@ def plot_dpd_vs_theil(dataset, out_dir, results_root=RESULTS):
     fig.savefig(out, dpi=200)
     plt.close(fig)
     return out
+
+
+STAR_LEVELS = [(0.001, "***"), (0.01, "**"), (0.05, "*")]
+FIG3_METRICS = ["Accuracy", DPD2, "Equalized Odds Difference", "Theil Index"]
+PAIRS = [("Logistic Regression baseline", "Fair Logistic Regression"),
+         ("MLP (64-64) baseline", "Fair MLP (64-64)")]
+
+
+def stars(p):
+    for thr, s in STAR_LEVELS:
+        if p < thr:
+            return s
+    return "ns"
+
+
+def plot_fair_vs_baseline(dataset, out_dir, results_root=RESULTS):
+    comp = load_seed_csvs(dataset, "model_comparison", results_root)
+    # one Holm family per (baseline, fair) pair, across the four plotted metrics
+    sig = {ff: significance_vs_baseline(comp, ff, bf, metrics=FIG3_METRICS)
+                 .set_index("Metric")["p_holm"]
+           for bf, ff in PAIRS}
+
+    fig, axes = plt.subplots(1, len(FIG3_METRICS), figsize=(4.4 * len(FIG3_METRICS), 4.6))
+    x = np.arange(len(PAIRS))
+    width = 0.38
+    for ax, metric in zip(axes, FIG3_METRICS):
+        for k, kind in enumerate(["baseline", "fair"]):
+            fams = [p[k] for p in PAIRS]
+            mean = [comp.loc[comp["Family"] == f, metric].mean() for f in fams]
+            std = [comp.loc[comp["Family"] == f, metric].std() for f in fams]
+            ax.bar(x + (k - 0.5) * width, mean, width, yerr=std, capsize=3,
+                   label=kind if metric == FIG3_METRICS[0] else None)
+        for i, (bf, ff) in enumerate(PAIRS):
+            top = comp.loc[comp["Family"].isin([bf, ff]), metric].max()
+            ax.text(i, top * 1.04, stars(sig[ff][metric]), ha="center", fontsize=11)
+        ax.set_xticks(x)
+        ax.set_xticklabels(["LogReg", "MLP"])
+        ax.set_title(metric, fontsize=10)
+    fig.legend(loc="upper right")
+    fig.suptitle(f"Fairness loss vs. baseline — {dataset} "
+                 f"(mean ± std over seeds; Wilcoxon, Holm-corrected)")
+    fig.tight_layout(rect=[0, 0, 1, 0.92])
+    out = Path(out_dir) / "fig3_fair_vs_baseline.png"
+    fig.savefig(out, dpi=200)
+    plt.close(fig)
+    return out
+
+
+def master_table(dataset, out_dir, results_root=RESULTS):
+    comp = load_seed_csvs(dataset, "model_comparison", results_root)
+    rows = []
+    for fam, g in comp.groupby("Family", sort=False):
+        row = {"Model": fam, "Seeds": len(g)}
+        for m in METRICS:
+            row[m] = f"{g[m].mean():.3f} ± {g[m].std():.3f}"
+        rows.append(row)
+    df = pd.DataFrame(rows)
+    df.to_csv(Path(out_dir) / "table1_master_comparison.csv", index=False)
+    (Path(out_dir) / "table1_master_comparison.tex").write_text(df.to_latex(index=False))
+    return df
+
+
+def ablation_table(dataset, out_dir, results_root=RESULTS):
+    """No-fairness / SoftGE-only / SoftDP-only / blend, at the seed-mean-best α.
+    Best (α, β) picked on validation seed means (same utopia rule as training)."""
+    sweep = load_seed_csvs(dataset, "sweep_results", results_root)
+    rows = []
+    for arch in ["logreg", "mlp"]:
+        g = sweep[sweep["Arch"] == arch]
+        mean = g.groupby(["Alpha", "Beta"], as_index=False).mean(numeric_only=True)
+        fair = mean[(mean["Alpha"] < 1)
+                    & mean["Val Positive Rate"].between(0.05, 0.95)].copy()
+        fair["dist"] = np.sqrt((1 - fair["Val Accuracy"]) ** 2
+                               + fair["Val DPD (Largest 2 Groups)"] ** 2)
+        best = fair.sort_values("dist").iloc[0]
+        a_star, b_star = best["Alpha"], best["Beta"]
+        variants = [("No fairness (α=1)", 1, 0),
+                    (f"SoftGE only (α={a_star}, β=0)", a_star, 0),
+                    (f"SoftDP only (α={a_star}, β=1)", a_star, 1),
+                    (f"Blend (α={a_star}, β={b_star})", a_star, b_star)]
+        for name, a, b in variants:
+            sel = g[(g["Alpha"] == a) & (g["Beta"] == b)]
+            row = {"Arch": ARCH_LABELS[arch], "Variant": name}
+            for m in METRICS:
+                row[m] = f"{sel[m].mean():.3f} ± {sel[m].std():.3f}"
+            rows.append(row)
+    df = pd.DataFrame(rows)
+    df.to_csv(Path(out_dir) / "table2_ablation.csv", index=False)
+    (Path(out_dir) / "table2_ablation.tex").write_text(df.to_latex(index=False))
+    return df

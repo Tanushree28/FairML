@@ -50,3 +50,45 @@ def test_dpd_vs_theil_writes_png(tmp_path):
     root = _fake_sweep_dir(tmp_path)
     out = plot_dpd_vs_theil("german", tmp_path, results_root=root)
     assert out.exists() and out.stat().st_size > 0
+
+
+def test_stars_thresholds():
+    from analysis.figures import stars
+    assert stars(0.0005) == "***"
+    assert stars(0.005) == "**"
+    assert stars(0.03) == "*"
+    assert stars(0.2) == "ns"
+
+
+def _fake_comparison_dir(tmp_path, n_seeds=6):
+    import numpy as np
+    rng = np.random.default_rng(1)
+    fams = ["Logistic Regression baseline", "Fair Logistic Regression",
+            "MLP (64-64) baseline", "Fair MLP (64-64)",
+            "Reweighing LogReg (Kamiran-Calders)"]
+    for seed in range(n_seeds):
+        rows = []
+        for fam in fams:
+            row = {"Model": fam, "Family": fam, "Seed": seed,
+                   "Alpha": 0.5, "Beta": 0.5}
+            for m in METRICS:
+                shift = -0.04 if fam.startswith("Fair") else 0.0
+                row[m] = 0.5 + shift + rng.normal(0, 0.004)
+            rows.append(row)
+        d = tmp_path / "german" / f"seed{seed}"
+        d.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(rows).to_csv(d / "model_comparison.csv", index=False)
+    return tmp_path
+
+
+def test_fig3_and_tables_write_outputs(tmp_path):
+    from analysis.figures import ablation_table, master_table, plot_fair_vs_baseline
+    root = _fake_comparison_dir(tmp_path)
+    _fake_sweep_dir(tmp_path, n_seeds=6)
+    assert plot_fair_vs_baseline("german", tmp_path, results_root=root).exists()
+    t1 = master_table("german", tmp_path, results_root=root)
+    assert "±" in t1[METRICS[0]].iloc[0]
+    t2 = ablation_table("german", tmp_path, results_root=root)
+    assert len(t2) == 8            # 2 archs x 4 variants
+    assert (tmp_path / "table1_master_comparison.tex").exists()
+    assert (tmp_path / "table2_ablation.tex").exists()
