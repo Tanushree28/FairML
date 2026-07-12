@@ -34,50 +34,26 @@ directly comparable.
 From the repo root (`FairML/`):
 
 ```bash
-# COMPAS (default)
-.venv/bin/python new_experiment/run_experiment.py
+# Full paper run: all three datasets, seeds 0-9 (~1-3 h)
+.venv/bin/python new_experiment/run_experiment.py --dataset all --seeds 0-9
 
-# German Credit
-.venv/bin/python new_experiment/run_experiment.py --dataset german
+# Single dataset / ad-hoc seed (also produces inline plots)
+.venv/bin/python new_experiment/run_experiment.py --dataset german --seeds 42
 
-# Both datasets
-.venv/bin/python new_experiment/run_experiment.py --dataset both
-
-# Force retraining (ignore cached checkpoints)
-.venv/bin/python new_experiment/run_experiment.py --retrain
-
-# Training knobs
-.venv/bin/python new_experiment/run_experiment.py --epochs 500 --patience 30
+# Paper figures + tables from the per-seed CSVs
+.venv/bin/python new_experiment/analysis/run_analysis.py --dataset all
 ```
-
-(If your shell already has the venv activated, plain `python` works too.)
 
 ## Outputs
 
-Everything lands under `new_experiment/`:
-
 ```
-MODELS/<dataset>/                      cached .pth checkpoints (one per arch × α × β)
-RESULTS/<dataset>/sweep_results.csv    full α×β sweep, both architectures, test + val metrics
-RESULTS/<dataset>/model_comparison.csv all models side by side on the test set
-RESULTS/<dataset>/PLOTS/
-    heatmap_logreg_<metric>.png        α×β heatmap per metric, logistic regression
-    heatmap_mlp_<metric>.png           α×β heatmap per metric, MLP
-    model_comparison.png               bar charts: all models × all 5 metrics
+MODELS/<dataset>/seed<k>/            cached .pth checkpoints
+RESULTS/<dataset>/seed<k>/           sweep_results.csv, model_comparison.csv
+RESULTS/paper/<dataset>/             fig1_pareto, fig2_beta_cross_effect,
+                                     fig2b_dpd_vs_theil, fig3_fair_vs_baseline,
+                                     table1/table2 (csv + tex), heatmaps,
+                                     supp_surrogate_validation
 ```
-
-Metrics reported everywhere (test set): Accuracy, Demographic Parity
-Difference (all groups), **DPD (Largest 2 Groups)**, Equalized Odds
-Difference, Theil Index, Gini Coefficient.
-
-**Why the extra DPD column:** the standard fairlearn DPD/EOD take the max–min
-gap across *all* sensitive groups. In COMPAS the test split contains groups
-with 3–5 people (Native American, Asian), so those metrics are pinned by
-tiny-group noise (almost every model shows DPD ≈ 0.47 regardless of
-training). The largest-two-groups version (African-American vs Caucasian —
-the comparison ProPublica's analysis focused on) is stable across splits and
-shows the real effect of the fairness loss. For German Credit (two sex
-groups) the two columns are identical.
 
 ## Models in the comparison
 

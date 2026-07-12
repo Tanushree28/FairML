@@ -9,40 +9,35 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Run the full experiment sweep (downloads ProPublica COMPAS dataset, trains/loads models, writes `results.csv` and heatmaps to `PLOTS/`):
+Run experiments (canonical pipeline — trains the α×β sweep + baselines, writes per-seed CSVs):
 ```
-python Compas.py
+.venv/bin/python new_experiment/run_experiment.py --dataset all --seeds 0-9
 ```
 
-There is no test suite, linter, or build step configured.
+Generate all paper figures/tables from the per-seed CSVs:
+```
+.venv/bin/python new_experiment/analysis/run_analysis.py --dataset all
+```
 
-Notes on re-running:
-- `Compas.py` skips training when a `MODELS/<model_name>.pth` checkpoint already exists. Delete the relevant `.pth` files in `MODELS/` to force retraining.
-- `Compas.py` skips writing `results.csv` if it already exists (it loads it instead). Delete `results.csv` to regenerate from a new sweep.
+Run tests:
+```
+.venv/bin/pytest new_experiment/tests/ -v
+```
 
 ## Architecture
 
-This is a research script that trains a logistic-regression classifier on COMPAS recidivism data with a **composite loss combining binary cross-entropy, a group-fairness term, and an individual-fairness term**, then sweeps over the weighting hyperparameters and produces fairness/accuracy heatmaps.
+Canonical pipeline: `new_experiment/` — differentiable composite fairness
+loss (`losses.py`: α·BCE + (1−α)·[β·SoftDP + (1−β)·SoftGE]), LR + MLP
+(`models.py`), three datasets (`data_loading.py`: COMPAS [ProPublica
+standard features, no duration leakage], German Credit, Adult), reweighing
+baseline (`baselines.py`), per-seed sweep results in
+`RESULTS/<dataset>/seed<k>/`, paper assets via `analysis/` into
+`RESULTS/paper/<dataset>/`.
 
-Entry point and orchestration: [Compas.py](Compas.py)
-- Loads COMPAS data from a remote URL, splits 60/20/20 train/val/test, preprocesses with `ColumnTransformer` (StandardScaler + OneHotEncoder), keeps `race` as the sensitive attribute.
-- Builds the cartesian product of `alpha_list × beta_list × group_fairness_list × individual_fairness_list` (~196 combinations) and trains/evaluates one model per combo.
+Evaluation metrics are imported from the repo root: `GroupFairness.py`,
+`IndividualFairness.py` — keep them there.
 
-Loss composition: [Loss.py](Loss.py)
-- `custom_loss_function` blends three signals:
-  - `total = alpha * bce + (1 - alpha) * (beta * group_fairness + (1 - beta) * individual_fairness)`
-- **Important:** the fairness terms call into `fairlearn`/numpy on `y_pred.round().detach().numpy()`, which breaks autograd for the fairness components — only the BCE term contributes gradients during training. Treat any change to this loss carefully if true differentiable fairness is intended.
+`legacy/` holds the frozen original scripts (known training bugs — see
+`legacy/README.md`). Do not extend them.
 
-Model: [Models.py](Models.py)
-- `LogisticRegressionModel` is a single `nn.Linear` + sigmoid. `train_model` runs 100 Adam epochs (`lr=0.01`, `weight_decay=1e-4`); the `epoch` argument is shadowed by the loop and unused.
-
-Fairness metrics:
-- Group metrics in [GroupFairness.py](GroupFairness.py): demographic parity, equalized odds, equal opportunity, disparate impact (all built on `fairlearn.metrics.MetricFrame`).
-- Individual metrics in [IndividualFairness.py](IndividualFairness.py): Theil index, generalized entropy, Atkinson, Gini.
-
-Outputs:
-- `MODELS/` — one `.pth` per `(alpha, beta, group_fairness, individual_fairness)` combination, named `model_alpha_{a}_beta_{b}_group_{g}_individual_{i}.pth`.
-- `results.csv` — accuracy + fairness metrics per combination.
-- `PLOTS/heatmap_<metric>.png` — alpha×beta heatmaps per metric. **Caveat:** the pivot in `Compas.py` aggregates over `group_fairness` and `individual_fairness`, collapsing those axes via mean.
-
-Unused/dead code to be aware of: `EarlyStopping.py` is not imported anywhere; `average_odds_difference` in `GroupFairness.py` is defined but not used in the sweep.
+Design spec: `docs/superpowers/specs/2026-07-11-fairml-paper-design.md`.
