@@ -25,7 +25,7 @@ the *instrument*; the trade-off map is the *contribution*.
 |---|---|---|---|
 | COMPAS | `two_year_recid` | race | Switch to ProPublica standard features (age, sex, priors_count, charge degree, juvenile counts). **Drop the leaking `duration` feature** (corr −0.78 with target, mechanical). Primary analysis on African-American vs. Caucasian; all-groups numbers kept as supplementary. Expected accuracy drops to literature-typical ~0.67–0.70 — this is correct, not a regression. |
 | German Credit | `risk` | sex | Unchanged. |
-| Adult (Census) | income > 50K | sex (primary), race (secondary) | **New.** Completes the field-standard dataset trio. |
+| Adult (Census) | income > 50K | sex | **New.** Completes the field-standard dataset trio. (A race-secondary analysis was considered and dropped; possible future work.) |
 
 Shared preprocessing: StandardScaler + one-hot encoding, 60/20/20
 train/val/test split, split re-drawn per seed.
@@ -50,7 +50,9 @@ train/val/test split, split re-drawn per seed.
 | ❌ Skipped | Adversarial debiasing | in-processing | only if everything else is complete and stable; ExpGrad keeps the in-processing category covered |
 
 **Degenerate-predictor guard:** any model with positive-prediction rate
-<2% or >98% is excluded from model selection and flagged in results.
+<5% or >95% is excluded from model selection (implemented in
+`pick_best_fair` and `ablation_table`; stricter than the originally
+drafted 2%/98%).
 
 ## 4. Experimental protocol
 
