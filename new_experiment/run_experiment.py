@@ -61,6 +61,7 @@ from IndividualFairness import theil_index, gini_coefficient
 from data_loading import load_dataset
 from models import LogisticRegression, MLP, train_model, predict_proba
 from losses import soft_demographic_parity, soft_generalized_entropy
+from baselines import reweighing_logreg
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -239,6 +240,9 @@ def run_fairlearn_baselines(ds, seed):
     thr.fit(X_tr, y_tr, sensitive_features=s_tr)
     add("ThresholdOptimizer LogReg (Demographic Parity)",
         thr.predict(X_te, sensitive_features=s_te, random_state=seed))
+
+    add("Reweighing LogReg (Kamiran-Calders)",
+        reweighing_logreg(X_tr, y_tr, s_tr, X_te, seed))
 
     rf = RandomForestClassifier(n_estimators=300, random_state=seed)
     rf.fit(X_tr, y_tr)
