@@ -61,7 +61,7 @@ from IndividualFairness import theil_index, gini_coefficient
 from data_loading import load_dataset
 from models import LogisticRegression, MLP, train_model, predict_proba
 from losses import soft_demographic_parity, soft_generalized_entropy
-from baselines import reweighing_logreg
+from baselines import reweighing_logreg, xgboost_reference
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -247,6 +247,8 @@ def run_fairlearn_baselines(ds, seed):
     rf = RandomForestClassifier(n_estimators=300, random_state=seed)
     rf.fit(X_tr, y_tr)
     add("Random Forest (no fairness)", rf.predict(X_te))
+
+    add("XGBoost (no fairness)", xgboost_reference(X_tr, y_tr, X_te, seed))
 
     return rows
 

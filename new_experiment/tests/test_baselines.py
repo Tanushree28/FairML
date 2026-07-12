@@ -18,3 +18,14 @@ def test_weights_are_uniform_when_independent():
     s = np.array(["a", "a", "b", "b"])
     w = kamiran_calders_weights(y, s)
     assert np.allclose(w, 1.0)
+
+
+def test_xgboost_reference_predicts_binary():
+    import numpy as np
+    from baselines import xgboost_reference
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(200, 5))
+    y = (X[:, 0] > 0).astype(int)
+    pred = xgboost_reference(X[:150], y[:150], X[150:], seed=0)
+    assert set(np.unique(pred)) <= {0, 1}
+    assert (pred == y[150:]).mean() > 0.8

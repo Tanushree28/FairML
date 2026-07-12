@@ -26,3 +26,11 @@ def reweighing_logreg(X_train, y_train, s_train, X_test, seed):
     clf = SkLogisticRegression(max_iter=1000, random_state=seed)
     clf.fit(X_train, y_train, sample_weight=w)
     return clf.predict(X_test)
+
+
+def xgboost_reference(X_train, y_train, X_test, seed):
+    from xgboost import XGBClassifier
+    clf = XGBClassifier(n_estimators=300, max_depth=6, learning_rate=0.1,
+                        random_state=seed, eval_metric="logloss")
+    clf.fit(X_train, y_train)
+    return clf.predict(X_test)
