@@ -1,13 +1,13 @@
 """Dataset loading for the new experiment.
 
-Loads COMPAS and German Credit datasets with 60/20/20 train/val/test split
-(seed-parameterized; default 42) and StandardScaler + OneHotEncoder(drop='first')
-preprocessing. COMPAS now uses ProPublica's standard row filters and feature set
-(excluding the label-leaking duration feature), so it no longer mirrors the
-original Compas.py exactly.
+Loads COMPAS, German Credit, Adult and Taiwan Credit Default with a 60/20/20
+train/val/test split (seed-parameterized; default 42) and StandardScaler +
+OneHotEncoder(drop='first') preprocessing. COMPAS now uses ProPublica's
+standard row filters and feature set (excluding the label-leaking duration
+feature), so it no longer mirrors the original Compas.py exactly.
 
-The COMPAS CSV is cached to data/compas-scores-two-years.csv after the first
-download so re-runs work offline.
+The downloaded CSVs (COMPAS, Adult, Taiwan) are cached under data/ after the
+first fetch so re-runs work offline.
 """
 
 from pathlib import Path
@@ -24,6 +24,14 @@ ROOT = Path(__file__).resolve().parent.parent
 COMPAS_URL = "https://raw.githubusercontent.com/propublica/compas-analysis/master/compas-scores-two-years.csv"
 COMPAS_CACHE = ROOT / "data" / "compas-scores-two-years.csv"
 ADULT_CACHE = ROOT / "data" / "adult.csv"
+TAIWAN_CACHE = ROOT / "data" / "taiwan_credit.csv"
+
+# UCI's documented names for OpenML's anonymized x1..x23 / y columns.
+TAIWAN_COLUMNS = ["LIMIT_BAL", "SEX", "EDUCATION", "MARRIAGE", "AGE",
+                  "PAY_0", "PAY_2", "PAY_3", "PAY_4", "PAY_5", "PAY_6",
+                  "BILL_AMT1", "BILL_AMT2", "BILL_AMT3", "BILL_AMT4", "BILL_AMT5", "BILL_AMT6",
+                  "PAY_AMT1", "PAY_AMT2", "PAY_AMT3", "PAY_AMT4", "PAY_AMT5", "PAY_AMT6",
+                  "default"]
 
 
 def _load_compas_frame():
@@ -95,6 +103,89 @@ def _load_adult_frame():
     return data[features], y, "sex"
 
 
+def _load_taiwan_frame(sensitive_col="SEX"):
+    """Default of Credit Card Clients (Taiwan, UCI / OpenML id 42477, n=30000).
+
+    Positive class: default on the next month's payment (~22.1%), so the
+    positive class is the adverse outcome as in COMPAS and German. Sensitive
+    attribute: SEX (11888 male / 18112 female) or EDUCATION (largest two
+    groups: university 14030 / graduate 10585). OpenML v1 ships the columns
+    anonymized as x1..x23; the names below are UCI's documented mapping,
+    verified against the published marginals.
+    """
+    if TAIWAN_CACHE.exists():
+        data = pd.read_csv(TAIWAN_CACHE)
+    else:
+        from sklearn.datasets import fetch_openml
+        raw = fetch_openml("default-of-credit-card-clients", version=1, as_frame=True).frame
+        raw.columns = TAIWAN_COLUMNS
+        raw.to_csv(TAIWAN_CACHE, index=False)
+        data = pd.read_csv(TAIWAN_CACHE)   # re-read so dtypes match the cached path
+
+    y = (data["default"].astype(int) == 1).astype(int).rename("default_next_month")
+
+    data = data.copy()
+    data["SEX"] = data["SEX"].map({1: "male", 2: "female"})
+    # UCI documents EDUCATION 1-4 and MARRIAGE 1-3; the undocumented codes
+    # (0, 5, 6) are folded into "other" rather than dropped.
+    data["EDUCATION"] = data["EDUCATION"].map(
+        {1: "graduate", 2: "university", 3: "high_school", 4: "other"}).fillna("other")
+    data["MARRIAGE"] = data["MARRIAGE"].map(
+        {1: "married", 2: "single", 3: "other"}).fillna("other")
+
+    features = ["LIMIT_BAL", "SEX", "EDUCATION", "MARRIAGE", "AGE",
+                "PAY_0", "PAY_2", "PAY_3", "PAY_4", "PAY_5", "PAY_6",
+                "BILL_AMT1", "BILL_AMT2", "BILL_AMT3", "BILL_AMT4", "BILL_AMT5", "BILL_AMT6",
+                "PAY_AMT1", "PAY_AMT2", "PAY_AMT3", "PAY_AMT4", "PAY_AMT5", "PAY_AMT6"]
+    return data[features], y, sensitive_col
+
+
+ACS_DIR = ROOT / "data" / "folktables"
+ACS_SUBSAMPLE = 50_000
+# Folktables feature lists (ACSEmploymentFiltered / ACSPublicCoverage); these
+# are coded categoricals, the rest (age, schooling level, income) are numeric.
+ACS_NUMERIC = {"AGEP", "SCHL", "PINCP"}
+
+
+def _load_acs_frame(task_name):
+    """Folktables ACS tasks (Ding et al. 2021), California 2018 1-year person
+    survey, subsampled once to 50k rows (fixed, independent of the split seed).
+
+    acs_employment: ACSEmploymentFiltered, target employed (ESR == 1),
+                    sensitive attribute sex.
+    acs_pubcov:     ACSPublicCoverage (age < 65, income <= 30k), target public
+                    health coverage, restricted to White and Black respondents
+                    so training loss, metrics and baselines all use that pair.
+    """
+    cache = ROOT / "data" / f"{task_name}_ca2018.csv"
+    if not cache.exists():
+        from folktables import ACSDataSource, ACSEmploymentFiltered, ACSPublicCoverage
+        task = {"acs_employment": ACSEmploymentFiltered,
+                "acs_pubcov": ACSPublicCoverage}[task_name]
+        raw = ACSDataSource(survey_year="2018", horizon="1-Year", survey="person",
+                            root_dir=str(ACS_DIR)).get_data(states=["CA"], download=True)
+        X, y, _ = task.df_to_pandas(raw)
+        frame = X.assign(target=y.iloc[:, 0].astype(int).values)
+        if task_name == "acs_pubcov":
+            frame = frame[frame["RAC1P"].isin([1, 2])]
+        frame = frame.sample(n=min(ACS_SUBSAMPLE, len(frame)), random_state=0)
+        frame.to_csv(cache, index=False)
+    data = pd.read_csv(cache)
+
+    y = data.pop("target").rename("target")
+    data = data.drop(columns=["ST"], errors="ignore")      # constant: one state
+    data["SEX"] = data["SEX"].map({1: "male", 2: "female"})
+    data["RAC1P"] = data["RAC1P"].map({1: "White", 2: "Black"}).fillna(
+        data["RAC1P"].astype(str).radd("race_"))
+    for col in data.columns:
+        if col in ACS_NUMERIC:
+            data[col] = data[col].fillna(-1).astype(float)
+        elif col not in ("SEX", "RAC1P"):
+            data[col] = data[col].fillna(-1).astype(int).astype(str).radd(f"{col}_")
+    sensitive = "SEX" if task_name == "acs_employment" else "RAC1P"
+    return data, y, sensitive
+
+
 def load_dataset(name, seed=42):
     """Returns a dict with torch tensors, numpy arrays, sensitive-feature
     series, and integer group ids for train/val/test. `seed` controls the
@@ -108,6 +199,18 @@ def load_dataset(name, seed=42):
     elif name == "adult":
         X, y, sensitive_col = _load_adult_frame()
         label = "Adult Census Income (sensitive attribute: sex)"
+    elif name == "taiwan":
+        X, y, sensitive_col = _load_taiwan_frame()
+        label = "Taiwan Credit Default (sensitive attribute: sex)"
+    elif name == "taiwan_edu":
+        X, y, sensitive_col = _load_taiwan_frame("EDUCATION")
+        label = "Taiwan Credit Default (sensitive attribute: education)"
+    elif name == "acs_employment":
+        X, y, sensitive_col = _load_acs_frame(name)
+        label = "ACS Employment, CA 2018 (sensitive attribute: sex)"
+    elif name == "acs_pubcov":
+        X, y, sensitive_col = _load_acs_frame(name)
+        label = "ACS Public Coverage, CA 2018 (sensitive attribute: race, White vs Black)"
     else:
         raise ValueError(f"Unknown dataset: {name}")
 

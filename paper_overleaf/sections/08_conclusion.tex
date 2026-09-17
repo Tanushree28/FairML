@@ -1,0 +1,44 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+We set out to measure, rather than derive, the tension between group and
+individual fairness. To do so we built a differentiable composite loss whose
+parameter $\beta$ interpolates continuously between a soft demographic-parity
+term and a soft generalized-entropy term, and swept it across a $7\times7$
+$(\alpha,\beta)$ grid, three datasets, two model families and ten seeds:
+$2{,}940$ trained models with paired significance testing throughout.
+
+Three findings stand out. First, the two objectives exhibit a statistically
+significant \emph{double dissociation}: the group term reduces demographic
+disparity by $78\%$--$89\%$ while significantly worsening benefit inequality,
+and the individual term significantly improves benefit inequality while
+leaving disparity unchanged or worse. The effects are strongly asymmetric in
+magnitude, because equalizing benefit is bounded by the achievable prediction
+quality in a way that equalizing selection rates is not. Second, on Adult the
+conflict extends within group fairness: driving demographic parity to $0.009$
+raises equalized odds by a factor of $3.3$, an empirical instance of a known
+impossibility, with the exchange rate quantified. Third, where a baseline
+already exhibits little disparity, the intervention has nothing to act on, and
+where the dataset is small, validation-based selection cannot reliably find
+the configurations that would act---on German Credit the tuned model
+reproduced the baseline disparity while a pre-specified configuration reduced
+it by $48\%$ at no accuracy cost.
+
+The composite loss reaches group-fairness levels comparable to established
+pre-, in- and post-processing methods without surpassing them. That was not
+the objective; the objective was a measurement instrument credible on the axis
+it shares with existing tools, and one that additionally traverses the axis
+they do not.
+
+The practical consequence is that $\beta$ should not be tuned. There is no
+metric that ranks its endpoints, because they optimize different and partly
+opposed definitions of the same word. It is a policy parameter, and the
+contribution of a trade-off map is to attach a measured price to each setting
+so that the choice is made deliberately rather than inherited from a library
+default.
+
+Future work should extend the map to intersectional subgroups, replace the
+all-groups equalized odds statistic with a largest-two-groups variant on
+COMPAS, test the composite loss under mini-batch training at larger scale, and
+characterise more precisely the sample-size floor below which fairness
+model selection ceases to function.

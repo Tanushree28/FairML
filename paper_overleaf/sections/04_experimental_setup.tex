@@ -1,0 +1,169 @@
+\section{Experimental Setup}
+\label{sec:setup}
+
+\subsection{Datasets}
+
+We use three datasets that together span three application domains, two
+sensitive attributes, and one and a half orders of magnitude in sample size.
+Table~\ref{tab:datasets} reports their characteristics after filtering.
+
+\begin{table}[t]
+\caption{Dataset characteristics after filtering. Base rates are the fraction
+of positive labels. The positive class is the \emph{adverse} outcome for
+COMPAS and German Credit and the \emph{favourable} outcome for Adult.}
+\label{tab:datasets}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & \textbf{COMPAS} & \textbf{German} & \textbf{Adult} \\
+\midrule
+Samples $n$              & $6{,}172$ & $1{,}000$ & $45{,}222$ \\
+Encoded features $d$     & $12$      & $21$      & $79$ \\
+Target ($y=1$)           & re-offend & bad credit & income $>\!50$K \\
+Sensitive attribute      & race      & sex        & sex \\
+Groups $|\mathcal{S}|$   & $6$       & $2$        & $2$ \\
+Overall base rate        & $0.455$   & $0.300$    & $0.248$ \\
+\midrule
+\multicolumn{4}{@{}l}{\textit{Two largest groups (size; base rate)}}\\
+Group 1 & Afr.-Am. & male & Male \\
+        & ($3{,}175$; $0.523$) & ($690$; $0.277$) & ($30{,}527$; $0.312$) \\
+Group 2 & Caucasian & female & Female \\
+        & ($2{,}103$; $0.391$) & ($310$; $0.352$) & ($14{,}695$; $0.114$) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Base rates differ across groups in all three datasets, most sharply in Adult
+($0.312$ versus $0.114$, a factor of $2.7$). This is the precise condition
+under which demographic parity and equalized odds are provably
+incompatible~\cite{barocas2019fairness}, and it drives the result of
+Section~\ref{sec:adult}.
+
+\subsubsection{COMPAS and a label-leakage correction}
+We apply ProPublica's standard row filters~\cite{angwin2016machine}
+(screening date within $\pm 30$ days of arrest, valid recidivism flag,
+charge degree not ordinary, valid score text) and use their standard feature
+set: age, sex, juvenile felony/misdemeanour/other counts, prior counts, charge
+degree, and race.
+
+A feature set previously used in our own pipeline additionally contained
+$\texttt{duration} = \texttt{end} - \texttt{start}$, the length of the
+observation window. This feature correlates $-0.78$ with the target for a
+\emph{mechanical} reason: re-offending truncates the observation window, so a
+short duration nearly implies the positive label. It is label leakage rather
+than signal, and we remove it. Doing so lowers COMPAS accuracy to
+approximately $0.68$, consistent with the literature; we regard the lower
+number as the correct one and report it throughout.
+
+\subsubsection{German Credit}
+We take the Statlog encoding~\cite{hofmann1994statlog} and define $y=1$ as
+\emph{bad} credit risk, so that---as in COMPAS---the positive class is the
+adverse outcome.
+
+\subsubsection{Adult}
+We use the $48{,}842$-row version~\cite{uci2017adult}, drop rows with missing
+values, exclude
+\texttt{fnlwgt} (a census sampling weight, not a person-level attribute), and
+prefer the ordinal \texttt{education-num} over the redundant categorical
+\texttt{education}.
+
+The sensitive attribute is retained as a model input in all cases. This is a
+deliberate ``fairness through awareness'' choice~\cite{dwork2012fairness}:
+removing it does not remove the information, since correlated proxies remain,
+and withholding it would prevent the group term \eqref{eq:softdp} from being
+expressed.
+
+\subsection{Preprocessing and Protocol}
+
+Each seed $k \in \{0,\dots,9\}$ draws an independent $60/20/20$
+train/validation/test split and initialises model weights. Numeric features
+are standardised and categorical features one-hot encoded with the first level
+dropped; unseen categories at transform time are encoded as all-zeros. All
+transformers are fit on the training split only. Splits are not stratified.
+
+Ten seeds give ten paired observations per comparison. All results are
+reported as mean $\pm$ standard deviation over seeds.
+
+\subsection{Evaluation Metrics}
+
+We evaluate on hard test predictions at a fixed threshold of $0.5$.
+
+\subsubsection{Accuracy} Fraction of correct predictions. Higher is better.
+There is no universal target; the relevant reference points are the
+majority-class rate and dataset-typical published performance.
+
+\subsubsection{Demographic parity difference (DPD)}
+The largest gap in selection rate between groups,
+$\max_g P(\hat{y}=1 \mid S=g) - \min_g P(\hat{y}=1 \mid S=g)$. Lower is
+better; the range is $[0,1]$. We emphasize \dpdtwo{}, the same quantity
+computed on the two \emph{largest} groups only. On COMPAS the all-groups
+statistic is pinned by groups of $31$ and $11$ individuals (roughly $6$ and
+$2$ in a test split), making it extremely unstable: across seeds we measure
+$0.608 \pm 0.211$ for the all-groups version against $0.304 \pm 0.049$ for
+\dpdtwo{}, a fourfold reduction in variance. For German and Adult, which have
+two groups, the two statistics coincide by construction.
+
+\subsubsection{Equalized odds difference (EOD)}
+The larger of the between-group true-positive-rate gap and the
+false-positive-rate gap~\cite{hardt2016equality}. Lower is better. Unlike DPD
+it conditions on the true label.
+
+\subsubsection{Generalized entropy index, \getwo{}}
+Equation~\eqref{eq:softge} evaluated on hard predictions, i.e. the inequality
+of the benefit vector \eqref{eq:benefit} with $b_i \in \{0,1,2\}$. Lower is
+better, with $0$ attained only by a perfect classifier.
+
+We note explicitly that no threshold in the literature designates a ``fair''
+value of DPD, EOD, or \getwo{}. The four-fifths rule~\cite{eeoc1978uniform} is
+sometimes invoked, but it is a \emph{ratio} test on selection rates and does
+not translate into a difference threshold. Values such as $\mathrm{DPD}<0.05$
+are conventions of practice, not standards. \getwo{} has no absolute
+interpretation at all and is meaningful only in comparison between models on
+the same data. We therefore report all comparisons as differences against a
+matched baseline with significance tests, rather than against absolute cutoffs.
+
+\subsection{Baselines}
+
+We compare against one representative from each mitigation family plus two
+unconstrained accuracy references, all fit on the same per-seed split:
+
+\begin{itemize}
+\item \textbf{Reweighing}~\cite{kamiran2012data} (pre-processing): logistic
+      regression trained with sample weights
+      $w(s,y) = P(s)P(y)/P(s,y)$.
+\item \textbf{ExponentiatedGradient}~\cite{agarwal2018reductions}
+      (in-processing), with demographic-parity and with equalized-odds
+      constraints.
+\item \textbf{ThresholdOptimizer}~\cite{hardt2016equality} (post-processing),
+      demographic-parity constraint, group-specific thresholds.
+\item \textbf{Random Forest} ($300$ trees) and
+      \textbf{XGBoost}~\cite{chen2016xgboost} ($300$ estimators, depth $6$,
+      learning rate $0.1$): no fairness intervention; these establish the
+      accuracy ceiling.
+\end{itemize}
+
+\subsection{Statistical Testing}
+
+For each (fair model, baseline) pair we apply a paired Wilcoxon signed-rank
+test~\cite{wilcoxon1945individual} across the ten seeds---paired because both
+models see identical splits, non-parametric because ten observations do not
+justify a normality assumption~\cite{demsar2006statistical}. We correct across
+the four-metric family $\{$accuracy, \dpdtwo{}, EOD, \getwo{}$\}$ using the
+Holm step-down procedure~\cite{holm1979simple}. With $n=10$ the smallest
+attainable two-sided $p$-value is $2^{-9} \approx 0.002$, which we report as
+$p = 0.002$ rather than as an open bound.
+
+\subsection{Implementation}
+
+Models and the composite loss are implemented in
+PyTorch~\cite{paszke2019pytorch}; preprocessing, logistic regression and
+random forests use scikit-learn~\cite{pedregosa2011scikit}; group-fairness
+metrics and the ExponentiatedGradient and ThresholdOptimizer baselines use
+Fairlearn~\cite{bird2020fairlearn}; the generalized entropy index uses
+AI Fairness 360~\cite{bellamy2019ai}. The full grid is
+$7 \times 7$ values of $(\alpha,\beta)$ with
+$\alpha,\beta \in \{0, 0.005, 0.05, 0.25, 0.5, 0.75, 1\}$, over $2$
+architectures, $3$ datasets and $10$ seeds: $2{,}940$ trained models. All runs
+are CPU-only.

@@ -1,0 +1,490 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 3. METRICS
+\section{Evaluation Metrics and Their Interpretation}
+
+Six metrics are computed on every model. This section explains each one, how to
+read its value, and --- critically --- whether any standard threshold actually
+exists.
+
+\begin{warnbox}[Read this before quoting any threshold]
+There is \textbf{no universally accepted ``good'' value} for DPD, EOD, or GE.
+This guide distinguishes three levels of authority:
+\begin{itemize}
+\item \textbf{Established standard} --- a formal, citable rule. Almost nothing
+in fairness metrics qualifies.
+\item \textbf{Common rule of thumb} --- widely used in practice but with no
+formal backing. Label it as such in the paper.
+\item \textbf{Project-specific interpretation} --- our own reading of our own
+numbers.
+\end{itemize}
+\end{warnbox}
+
+\subsection{Accuracy}
+
+\textbf{What:} fraction of correct predictions.
+\textbf{Direction:} higher is better.
+\textbf{Range:} $0$ to $1$.
+
+\textbf{Reference point:} the majority-class rate. Base rates in this project
+are COMPAS $0.455$ (majority-class $\approx 0.545$), German $0.300$
+($\approx 0.70$), Adult $0.248$ ($\approx 0.752$). A model must beat that to be
+doing anything at all.
+
+\textbf{Standard?} Accuracy itself is universal; there is \textbf{no universal
+``good'' accuracy}. What exists is \emph{literature-typical} performance per
+dataset --- COMPAS models land at $\approx 0.66$--$0.70$, Adult
+$\approx 0.84$--$0.87$, German $\approx 0.72$--$0.77$.
+
+\subsection{DPD --- Demographic Parity Difference}
+
+\textbf{Stands for:} Demographic Parity Difference (also: statistical parity
+difference).
+
+\textbf{Measures:} the largest gap in \textbf{selection rate} (fraction
+predicted positive) between sensitive groups:
+\begin{equation}
+\mathrm{DPD} = \max_g P(\hat y = 1 \mid S = g) - \min_g P(\hat y = 1 \mid S = g)
+\end{equation}
+It \textbf{ignores the true labels entirely} --- it only asks who gets flagged,
+not who deserved it.
+
+\textbf{Direction:} lower is better. \textbf{Range:} $0$ to $1$. Zero means
+every group is flagged at an identical rate.
+
+\begin{warnbox}[Is there a standard threshold? No.]
+What people \emph{do} cite:
+\begin{itemize}
+\item \textbf{The four-fifths rule / 80\% rule} (US EEOC, \emph{Uniform
+Guidelines on Employee Selection Procedures}, 1978) --- a legal rule of thumb
+for adverse impact. But it is a \textbf{ratio} test
+($\min\text{ rate}/\max\text{ rate} \ge 0.8$), \textbf{not a difference test}.
+It does not translate to a DPD threshold without knowing the base selection
+rate. Cite it for context; do \emph{not} claim ``DPD $<0.2$ passes the 80\%
+rule'' --- that is only true if the maximum selection rate happens to be $1.0$.
+\item \textbf{Common informal practice:} DPD $<0.05$ is treated as ``close to
+parity,'' $0.05$--$0.10$ as modest disparity, $>0.10$ as substantial. This is a
+\emph{convention}, not a standard.
+\end{itemize}
+\end{warnbox}
+
+\subsubsection{The two variants in this project}
+\begin{itemize}
+\item \code{Demographic Parity Difference} --- computed over \textbf{all} groups.
+\item \code{DPD (Largest 2 Groups)}, written \dpdtwo{} --- restricted to the two
+largest groups. On COMPAS that is African-American ($n=3175$) vs Caucasian
+($n=2103$), ProPublica's focal comparison. On German and Adult (two groups
+each) the two variants are \textbf{identical by construction}.
+\end{itemize}
+
+\begin{example}[Why the largest-2 variant exists]
+COMPAS has six race groups and the small ones are tiny: Asian $n=31$, Native
+American $n=11$ across the \emph{whole} dataset --- roughly $6$ and $2$ people
+in a 1{,}235-row test split. A $\max-\min$ over all groups is then pinned by a
+handful of individuals and swings wildly. The evidence is in our own results:
+\begin{center}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+COMPAS, LR baseline & mean & std \\
+\midrule
+DPD (all six groups)  & $0.608$ & $\pm 0.211$ \\
+\dpdtwo{} (two largest) & $0.304$ & $\pm 0.049$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+The standard deviation is over four times larger for the all-groups version.
+That is why \dpdtwo{} is the primary metric --- and this table \emph{is} the
+justification to put in the paper.
+\end{example}
+
+\subsection{EOD --- Equalized Odds Difference}
+
+\textbf{Measures:} whether the model's \emph{error rates} are equal across
+groups. Computed as the larger of \{max$-$min true-positive-rate gap,
+max$-$min false-positive-rate gap\}. Unlike DPD it \emph{does} use the true
+labels --- it asks whether the model is equally accurate for each group, not
+whether it selects them equally often.
+
+\textbf{Direction:} lower is better. \textbf{Range:} $0$ to $1$.
+\textbf{Standard threshold?} \textbf{No} --- same situation as DPD.
+
+\begin{keybox}[The relationship that drives our biggest result]
+DPD and EOD are \textbf{mathematically incompatible} whenever base rates differ
+across groups. Our data has exactly that: Adult female base rate $0.114$ vs
+male $0.312$; COMPAS African-American $0.523$ vs Caucasian $0.391$. So
+\textbf{driving DPD to zero must push EOD up.} Our Adult results show this
+precisely.
+\end{keybox}
+
+\begin{warnbox}[COMPAS EOD is unreliable in the current code]
+EOD is computed over \textbf{all} groups, without the largest-2 restriction
+that was applied to DPD. So COMPAS EOD inherits exactly the tiny-group noise
+problem --- which is why every COMPAS EOD is $\approx 0.64$--$0.83$ with std
+$\approx 0.15$--$0.22$, and why \emph{no} COMPAS EOD comparison reaches
+significance. Either add a largest-2 EOD, or explicitly caveat the column. Do
+not report it as a clean finding.
+\end{warnbox}
+
+\subsection{GE(2) --- Generalized Entropy Index (labelled ``Theil'' in the code)}
+
+\textbf{What it is:} inequality of the benefit vector $b = 1 + \hat y - y$,
+measured with the generalized entropy index of order $2$:
+\begin{equation}
+\getwo = \frac{1}{2n}\sum_i\left[\left(\frac{b_i}{\bar b}\right)^{2} - 1\right]
+       = \frac{\mathrm{Var}(b)}{2\,\bar b^{\,2}}
+\end{equation}
+
+\textbf{Direction:} lower is better. \textbf{Range:} $0$ to $\infty$ in
+principle; $0$ means perfectly equal benefit (a perfect classifier, since every
+$b=1$).
+
+\begin{warnbox}[Naming error to fix before submitting]
+\file{IndividualFairness.py} defines \code{theil\_index} as AIF360's
+\code{generalized\_entropy\_error(..., alpha=2)}. That is \textbf{backwards
+relative to the standard definition}. AIF360's own docstring states: a value of
+$0$ is the mean log deviation, \textbf{$1$ is the Theil index}, and $2$ is half
+the squared coefficient of variation.
+
+So everything the project calls ``Theil Index'' is really \textbf{GE($\alpha=2$)}.
+\textbf{No number is wrong} --- GE(2) is a perfectly standard inequality index,
+and crucially it is the \emph{same} index the SoftGE surrogate optimises (also
+$\alpha=2$), so training and evaluation are consistent. But the \textbf{label}
+must change, or a reviewer familiar with Speicher et al.\ will flag it
+immediately. The paper produced alongside this guide already uses
+\textbf{GE(2)} throughout.
+\end{warnbox}
+
+\textbf{What it actually captures on hard predictions:} with binary
+predictions, $b \in \{0,1,2\}$ only. So GE(2) here is a \textbf{function of the
+false-positive and false-negative counts alone}. It measures how much error
+there is and how it splits between the two error types --- not, strictly, whether
+\emph{similar individuals} got similar treatment. This is the standard Speicher
+et al.\ operationalisation, so it is defensible, but be precise: it is an
+\emph{inequality-of-outcomes} measure, not a Lipschitz-style ``similar
+individuals treated similarly'' measure.
+
+\textbf{Standard threshold?} \textbf{None whatsoever.} GE has no absolute
+interpretation. It is meaningful \textbf{only comparatively} --- model A versus
+model B on the same dataset. Say this plainly in the paper rather than implying
+a range.
+
+\subsection{Gini Coefficient}
+
+\textbf{What it is supposed to be:} the classic economics inequality measure,
+from the Lorenz curve. $0 =$ perfect equality, $1 =$ maximum inequality.
+
+\begin{warnbox}[This metric carries no fairness information]
+\file{IndividualFairness.py} applies the Lorenz/Gini construction to
+\code{y\_pred} directly. Since \code{y\_pred} is a vector of 0s and 1s, this
+reduces \textbf{exactly} to
+\[ \mathrm{Gini} = 1 - \text{positive prediction rate} \]
+Verified numerically to four decimal places on three random vectors (positive
+rate $0.3270 \to$ Gini $0.6730$; $0.2045 \to 0.7955$; $0.4700 \to 0.5300$), and
+consistent with the result tables (German LR baseline Gini $0.869$ implies a
+positive rate of $0.131$ against a base rate of $0.30$ --- plausible
+under-prediction on an imbalanced dataset).
+
+\textbf{Recommendation:} either \textbf{drop it} from the paper, or
+\textbf{relabel it} as ``selection rate (reported as $1-$Gini)'' --- which is
+genuinely useful, since it is exactly the quantity the degeneracy guard
+watches. What you must not do is present it as an independent
+individual-fairness metric.
+\end{warnbox}
+
+\subsection{Soft DP / Soft GE}
+
+Logged per sweep point, computed on \emph{test probabilities}. These are not
+evaluation metrics --- they exist solely for the surrogate-validation scatter
+(Figure~\ref{fig:guide-surrogate}). Keep them in supplementary material.
+
+\subsection{Summary table}
+
+\begin{center}
+\scriptsize
+\renewcommand{\arraystretch}{1.3}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}L{0.098\textwidth} L{0.205\textwidth} c L{0.055\textwidth} L{0.195\textwidth} L{0.245\textwidth}@{}}
+\toprule
+\textbf{Metric} & \textbf{Meaning (plain)} & \textbf{Dir.} & \textbf{Range}
+& \textbf{Standard?} & \textbf{How we interpret our result} \\
+\midrule
+
+\textbf{Accuracy} & \% correct & $\uparrow$ & $0$--$1$ &
+No. Compare to majority-class rate and dataset literature &
+COMPAS ${\approx}0.68$, Adult ${\approx}0.85$, German ${\approx}0.73$ --- all
+literature-typical \\
+
+\textbf{DPD} (all groups) & Max$-$min selection rate over all groups &
+$\downarrow$ & $0$--$1$ &
+\textbf{No.} 80\% rule is a \emph{ratio} test, not a difference test &
+On COMPAS dominated by tiny-group noise --- report as secondary only \\
+
+\textbf{\dpdtwo{}} & Same, restricted to the two biggest groups &
+$\downarrow$ & $0$--$1$ &
+\textbf{No.} ``${<}0.05$ = near parity'' is convention, not standard &
+\textbf{Primary group-fairness metric.} Stable across seeds \\
+
+\textbf{EOD} & Max gap in TPR \emph{or} FPR across groups &
+$\downarrow$ & $0$--$1$ &
+\textbf{No.} ``${<}0.1$'' is convention only &
+Mathematically opposed to DPD when base rates differ.
+\textbf{COMPAS values unreliable} \\
+
+\textbf{\getwo{}} & Inequality of benefit $b = 1{+}\hat y{-}y$ &
+$\downarrow$ & $0$--$\infty$ &
+\textbf{None. Comparative only} &
+\textbf{Primary individual-fairness metric.} Only meaningful vs another model
+on the same data \\
+
+\textbf{Gini} & \emph{As implemented:} exactly $1-$selection rate &
+--- & $0$--$1$ & n/a &
+\textbf{Not an independent fairness metric.} Drop or relabel \\
+
+\textbf{Soft DP / Soft GE} & Differentiable training surrogates &
+$\downarrow$ & --- & n/a &
+Supplementary: validates soft ${\approx}$ hard ($r = 0.63$--$0.92$) \\
+
+\bottomrule
+\end{tabular}
+\\[4pt]
+\footnotesize $\uparrow$ = higher is better, $\downarrow$ = lower is better.
+\end{center}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 4. METHODOLOGY
+\section{Methodology, Step by Step}
+
+\subsection{Step 1 --- Dataset selection and loading}
+
+Three datasets, chosen because together they are the field-standard trio for
+tabular fairness work. Actual figures, read from the loaders:
+
+\begin{center}
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & \textbf{COMPAS} & \textbf{German Credit} & \textbf{Adult} \\
+\midrule
+Samples $n$            & $6{,}172$ & $1{,}000$ & $45{,}222$ \\
+Target ($y=1$)         & re-offended & \textbf{bad} credit & income $>$\$50K \\
+Sensitive attribute    & race & Sex & sex \\
+Number of groups       & $6$ & $2$ & $2$ \\
+Overall base rate      & $0.455$ & $0.300$ & $0.248$ \\
+Encoded features       & $12$ & $21$ & $\approx 79$ \\
+\midrule
+\multicolumn{4}{@{}l}{\textit{Group sizes and per-group base rates}} \\
+Largest group  & Afr.-Am.\ $3{,}175$ ($0.523$) & male $690$ ($0.277$) & Male $30{,}527$ ($0.312$) \\
+2nd largest    & Caucasian $2{,}103$ ($0.391$) & female $310$ ($0.352$) & Female $14{,}695$ ($0.114$) \\
+Others         & Hisp.\ $509$, Other $343$, & --- & --- \\
+               & \textbf{Asian 31, Nat.Am.\ 11} & & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Why these three:} they span three domains (criminal justice, credit,
+income), two sensitive attributes (race, sex), and three orders of magnitude of
+sample size --- exactly what RQ2 needs to test consistency.
+
+\textbf{Why the differing base rates matter:} they are the \emph{reason} DPD and
+EOD conflict. Adult's female-vs-male base rate gap ($0.114$ vs $0.312$, a factor
+of $2.7$) is the mechanical driver of our most striking result.
+
+\subsection{Step 2 --- The COMPAS leakage fix}
+
+We apply ProPublica's standard row filters:
+\begin{itemize}
+\item \code{days\_b\_screening\_arrest} within $\pm30$ days
+\item \code{is\_recid} $\ne -1$
+\item \code{c\_charge\_degree} $\ne$ \code{O}
+\item \code{score\_text} $\ne$ \code{N/A}
+\end{itemize}
+Features used:
+\code{age}, \code{sex}, \code{juv\_fel\_count}, \code{juv\_misd\_count},
+\code{juv\_other\_count}, \code{priors\_count}, \code{c\_charge\_degree},
+\code{race}.
+
+\begin{keybox}[This is a genuine methodological contribution]
+An earlier version of this project included a feature
+$\code{duration} = \code{end} - \code{start}$ that correlated $\boldsymbol{-0.78}$
+with the target. That correlation is \textbf{mechanical, not predictive}:
+re-offending truncates the observation window, so short duration $\Rightarrow$
+re-offended, almost by definition. That is \textbf{label leakage} --- the model
+was reading the answer off the feature.
+
+Removing it drops COMPAS accuracy to the literature-typical
+$\approx 0.67$--$0.68$. \textbf{This is a correction, not a regression.} Frame it
+as a soundness contribution in the paper.
+\end{keybox}
+
+\subsection{Step 3 --- Preprocessing}
+
+Per seed:
+\begin{enumerate}
+\item Split $60/20/20$ into train/validation/test. (Note: splits are
+\emph{not} stratified --- worth a sentence in the paper.)
+\item Extract the sensitive column per split; build integer group codes with
+\textbf{one shared category mapping across all splits} so group IDs mean the
+same thing everywhere. This matters --- the torch loss indexes by these codes.
+\item Fit the \code{ColumnTransformer} \textbf{on train only}, apply to
+val/test --- correct, no leakage:
+  \begin{itemize}
+  \item numeric $\to$ \code{StandardScaler}
+  \item categorical $\to$ \code{OneHotEncoder(drop='first', handle\_unknown='ignore')}
+  \end{itemize}
+\item Convert to torch tensors.
+\end{enumerate}
+
+\begin{warnbox}[There is no feature-engineering step --- say so]
+No interaction terms, no binning, no feature selection. Features are used as
+published. This is \emph{appropriate} --- the paper is about the loss function,
+and inventing features would confound the comparison. But state it explicitly
+rather than leaving a gap where a ``feature engineering'' section would be.
+\end{warnbox}
+
+\subsection{Step 4 --- The composite loss}
+
+Equation~\eqref{eq:composite}, with SoftDP and SoftGE as defined earlier. Two
+bugs from the legacy code are fixed here, and both belong in the paper's
+reproducibility discussion:
+
+\begin{enumerate}
+\item \textbf{Gradient flow.} The original computed fairness terms via
+fairlearn/aif360 on the detached array
+\begin{center}\code{y\_pred.round().detach().numpy()}\end{center}
+The \code{.detach()} severs the autograd graph --- \textbf{only BCE ever
+produced gradients}, so $\alpha$ and $\beta$ had almost no effect on the learned model.
+That is why the legacy heatmaps were flat in $\beta$. Every term is now computed
+in torch on raw probabilities.
+\item \textbf{Double sigmoid.} The old model applied sigmoid in \code{forward}
+and the loss applied it again. Now models return logits and the loss uses
+\code{binary\_cross\_entropy\_with\_logits}.
+\end{enumerate}
+
+\begin{example}[Putting a number through the composite loss]
+Suppose at some point in training, on the training batch:
+\[
+\mathrm{BCE} = 0.62, \qquad \mathrm{SoftDP} = 0.18, \qquad \mathrm{SoftGE} = 0.09
+\]
+Compare two settings of the dial at the same fairness pressure
+$\alpha = 0.75$ (so $1-\alpha = 0.25$):
+
+\medskip
+\textbf{$\beta = 1$ (group-only):}
+\[
+\mathcal{L} = 0.75(0.62) + 0.25\big[1(0.18) + 0(0.09)\big]
+            = 0.465 + 0.045 = \mathbf{0.510}
+\]
+
+\textbf{$\beta = 0$ (individual-only):}
+\[
+\mathcal{L} = 0.75(0.62) + 0.25\big[0(0.18) + 1(0.09)\big]
+            = 0.465 + 0.0225 = \mathbf{0.4875}
+\]
+
+\textbf{$\beta = 0.5$ (blend):}
+\[
+\mathcal{L} = 0.465 + 0.25\big[0.5(0.18) + 0.5(0.09)\big]
+            = 0.465 + 0.03375 = \mathbf{0.4988}
+\]
+
+Same accuracy term in all three; only the \emph{composition} of the fairness
+penalty changes. Gradient descent therefore pushes the model in a different
+direction for each $\beta$ --- which is the entire mechanism the study
+exploits.
+\end{example}
+
+\subsection{Step 5 --- Training}
+
+Adam (lr $0.01$, weight decay $10^{-4}$), full-batch, up to 300 epochs, early
+stopping on \textbf{validation composite loss} with patience 20, best weights
+restored from a deep copy.
+
+Note that early stopping monitors the \emph{composite} loss at that
+$(\alpha,\beta)$ --- not plain BCE. This is the right choice (you select the best
+model for the objective you are actually optimising), but it means the stopping
+criterion shifts as you move across the grid. Mention it.
+
+\subsection{Step 6 --- The sweep}
+
+For each of $7\alpha \times 7\beta = 49$ combinations, per architecture (2), per
+dataset (3), per seed (10):
+
+\begin{itemize}
+\item Set \code{torch.manual\_seed(seed)} and \code{np.random.seed(seed)}
+before instantiating the model $\Rightarrow$ identical initialisation across
+grid points within a seed, so differences are attributable to $(\alpha,\beta)$,
+not initialisation luck.
+\item Train (or load a cached checkpoint).
+\item Predict on test, threshold at $0.5$, compute all six metrics.
+\item Also record validation accuracy, validation \dpdtwo{}, validation positive
+rate (for selection and the degeneracy guard), soft metrics, and training time.
+\end{itemize}
+
+\begin{center}
+\textbf{Total: $49 \times 2 \times 3 \times 10 = 2{,}940$ trained models.}
+\end{center}
+
+\subsection{Step 7 --- Model selection}
+
+Validation-only, in three steps:
+\begin{enumerate}
+\item Keep $\alpha < 1$ (must have \emph{some} fairness weight).
+\item Keep validation positive rate $\in [0.05, 0.95]$ (degeneracy guard).
+\item Minimise $\sqrt{(1-\text{val\_acc})^2 + \text{val\_DPD}_2^2}$.
+\item Test metrics reported only, \textbf{never used for selection}.
+\end{enumerate}
+
+Which $(\alpha, \beta)$ actually got picked, across ten seeds --- this is itself
+a result:
+
+\begin{center}
+\small
+\begin{tabular}{@{}llcc@{}}
+\toprule
+\textbf{Dataset} & \textbf{Model} & \textbf{Distinct configs / 10 seeds} & \textbf{Mean $\beta$} \\
+\midrule
+COMPAS & Fair LR  & $5$  & $0.63$ \\
+COMPAS & Fair MLP & $5$  & $0.60$ \\
+German & Fair LR  & $8$  & $0.19$ \\
+German & Fair MLP & $\mathbf{10}$ & $0.41$ \\
+Adult  & Fair LR  & $4$  & $0.58$ \\
+Adult  & Fair MLP & $3$  & $0.65$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+German is unstable: the MLP picks a \emph{different} configuration in every
+single seed. That instability is a finding, analysed in
+Section~\ref{sec:guide-german}.
+
+\subsection{Step 8 --- Baselines and Step 9 --- Aggregation}
+
+All baselines are fit on the same seed's training split and evaluated on the
+same test split. Then the ten per-seed CSVs are concatenated, and for each
+(fair model, baseline) pair we run a \textbf{paired Wilcoxon signed-rank test}
+across seeds per metric, \textbf{Holm-corrected} across the metric family
+\{Accuracy, \dpdtwo{}, EOD, \getwo{}\}.
+
+\begin{warnbox}[A statistical detail to get right]
+With $n=10$ seeds, the smallest two-sided $p$-value a Wilcoxon test can produce
+is $2^{-9} \approx 0.00195$. Report it as $p = 0.002$. Do \textbf{not} write
+``$p < 0.001$'' --- that is not attainable at this sample size, and it means
+every single seed moved in the same direction.
+\end{warnbox}
+
+\subsection{Libraries used}
+
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Library} & \textbf{Used for} \\
+\midrule
+PyTorch & models + the differentiable composite loss \\
+scikit-learn & preprocessing, splits, LR/RF, accuracy \\
+fairlearn & DPD, EOD, ExponentiatedGradient, ThresholdOptimizer \\
+AIF360 & generalized entropy index \\
+xgboost & XGBoost accuracy reference \\
+scipy & Wilcoxon signed-rank test \\
+pandas / numpy & data handling \\
+matplotlib / seaborn & figures \\
+\bottomrule
+\end{tabular}
+\end{center}

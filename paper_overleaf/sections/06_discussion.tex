@@ -1,0 +1,93 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Why the Two Objectives Are Not Symmetric}
+
+The group term moves its target by roughly $80\%$; the individual term moves
+its own by roughly $5\%$. The asymmetry is not a tuning artefact but follows
+from what each objective can control.
+
+\softdp{} in \eqref{eq:softdp} is a difference of group means of $p$. A model
+can reduce it by shifting the decision surface between groups---an operation
+that costs little accuracy because it redistributes predictions rather than
+requiring better ones. The quantity is, in effect, freely adjustable.
+
+\softge{} in \eqref{eq:softge} is the inequality of $b_i = 1 + p_i - y_i$.
+Benefit equality is attained exactly when $b_i$ is constant, that is when
+every individual is predicted equally correctly. Its floor is therefore set by
+the irreducible error of the hypothesis class on the data: one cannot equalize
+benefit without in fact being more accurate. On COMPAS, where the ceiling is
+approximately $0.68$ accuracy, there is little room, and the term accordingly
+achieves little. A useful implication is that individual fairness in this
+outcome-based sense is not primarily an allocation problem but a
+\emph{prediction-quality} problem.
+
+\subsection{$\beta$ as a Policy Parameter, Not a Hyperparameter}
+
+Hyperparameters are tuned: one searches for the value that maximises a
+criterion. $\beta$ does not admit that treatment, because the two ends of its
+range optimise different criteria and there is no metric that ranks them.
+Selecting $\beta$ by validation performance simply encodes whichever fairness
+notion the validation metric happens to measure---which is exactly what our
+utopia-distance rule does, and why it is scale-sensitive
+(Section~\ref{sec:german}).
+
+$\beta$ is better understood as a \emph{policy dial}: it makes explicit a
+commitment that is otherwise implicit and undocumented in a deployed system.
+Our results give that commitment a price. On Adult, moving from $\beta=0$ to
+$\beta=1$ buys a $0.18$ reduction in demographic parity difference at a cost
+of $0.22$ in equalized odds difference and $0.015$ in benefit inequality. An
+institution that must state which definition it is optimizing can read the
+consequences of that choice off the trade-off map rather than discovering them
+after deployment.
+
+\subsection{The Uncomfortable Case}
+
+The Adult MLP at $\beta=1$ makes the tension concrete. It achieves
+$\dpdtwo = 0.009$: men and women are selected at nearly identical rates, and
+by the most widely cited group-fairness definition the model is close to
+ideal. The same model has $\mathrm{EOD} = 0.321$, meaning its error rates
+differ across sexes by roughly a third---worse than the unconstrained baseline
+by a factor of $3.3$. Both statements are true of the same predictor.
+
+There is no analysis internal to the data that resolves this. Whether it is
+better to select equally or to err equally is a normative question about what
+the decision is for. The value of a trade-off map is not that it answers the
+question but that it prevents the answer from being made accidentally, by a
+default in a fairness library.
+
+\subsection{Where the Composite Loss Sits Among Existing Methods}
+
+On group-fairness metrics the loss matches rather than beats
+Reweighing~\cite{kamiran2012data},
+ExponentiatedGradient~\cite{agarwal2018reductions} and
+ThresholdOptimizer~\cite{hardt2016equality}
+(Table~\ref{tab:master}, Fig.~\ref{fig:pareto}). We regard that as sufficient
+for its purpose: an instrument used to measure a trade-off must be credible on
+the axis it shares with existing tools, and it is.
+
+Its distinguishing property is the one those methods lack. Each of the
+baselines is constructed around a single constraint---demographic parity or
+equalized odds---and offers no continuous path to an individual-fairness
+objective. The composite loss traverses that path within a fixed architecture,
+optimizer and evaluation protocol, so differences along $\beta$ are
+attributable to the objective rather than to a change of method. That is what
+makes Fig.~\ref{fig:beta} interpretable as a trade-off curve.
+
+\subsection{A Sample-Size Floor for Fairness Model Selection}
+
+The German Credit analysis (Section~\ref{sec:german}) generalizes beyond this
+paper. Fairness metrics are differences of \emph{conditional} rates, so their
+effective sample size is governed by the smallest group, not by $n$. With
+$310$ women in the dataset and roughly $62$ in a validation split, the
+standard error of a group selection rate is comparable to the entire disparity
+being measured, and validation-based tuning ranks noise
+(Table~\ref{tab:selection}).
+
+Practitioners frequently select fairness hyperparameters exactly this way. Our
+results suggest that such a procedure should be accompanied by a check---the
+validation--test correlation of the fairness metric across configurations is a
+cheap one---and that where it fails, a pre-specified configuration is
+preferable to a tuned one. The cost of ignoring this is not merely a weaker
+result: on German the tuned model reproduced the baseline disparity while a
+pre-specified $\beta=1$ reduced it by $48\%$ at no accuracy cost.

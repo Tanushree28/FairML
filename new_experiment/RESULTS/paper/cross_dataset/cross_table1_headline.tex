@@ -1,0 +1,14 @@
+\begin{tabular}{lllrrrrrrrrrrrr}
+\toprule
+Dataset & Role & Arch & Acc base & Acc fair & Acc p_holm & DPD2 base & DPD2 fair & DPD2 p_holm & GE2 base & GE2 fair & GE2 p_holm & DPD2 change % & Acc cost (pts) & Selected beta (mean) \\
+\midrule
+COMPAS (race) & main & LR & 0.676 & 0.661 & 0.008 & 0.304 & 0.061 & 0.008 & 0.191 & 0.200 & 0.027 & -79.972 & 1.521 & 0.625 \\
+COMPAS (race) & main & MLP & 0.682 & 0.669 & 0.018 & 0.284 & 0.082 & 0.008 & 0.177 & 0.181 & 0.863 & -71.247 & 1.295 & 0.600 \\
+Adult (sex) & main & LR & 0.845 & 0.830 & 0.008 & 0.184 & 0.021 & 0.008 & 0.084 & 0.095 & 0.008 & -88.503 & 1.527 & 0.575 \\
+Adult (sex) & main & MLP & 0.851 & 0.836 & 0.008 & 0.182 & 0.026 & 0.008 & 0.080 & 0.091 & 0.008 & -85.605 & 1.470 & 0.650 \\
+ACS Public Coverage (race) & main & LR & 0.709 & 0.705 & 0.008 & 0.285 & 0.019 & 0.008 & 0.187 & 0.187 & 0.846 & -93.255 & 0.383 & 0.400 \\
+ACS Public Coverage (race) & main & MLP & 0.731 & 0.727 & 0.008 & 0.243 & 0.020 & 0.008 & 0.164 & 0.166 & 0.193 & -91.642 & 0.453 & 0.525 \\
+ACS Employment (sex) & boundary & LR & 0.746 & 0.747 & 0.734 & 0.122 & 0.009 & 0.008 & 0.102 & 0.097 & 0.008 & -92.452 & -0.089 & 0.600 \\
+ACS Employment (sex) & boundary & MLP & 0.769 & 0.766 & 0.037 & 0.088 & 0.016 & 0.008 & 0.099 & 0.094 & 0.020 & -81.374 & 0.239 & 0.550 \\
+\bottomrule
+\end{tabular}

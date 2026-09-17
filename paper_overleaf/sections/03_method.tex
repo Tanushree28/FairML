@@ -1,0 +1,213 @@
+\section{Method}
+\label{sec:method}
+
+\subsection{Problem Setting and Notation}
+
+We consider binary classification. Let $x_i \in \mathbb{R}^d$ be the feature
+vector of individual $i$, $y_i \in \{0,1\}$ the true label, and
+$s_i \in \mathcal{S}$ the sensitive attribute, where $\mathcal{S}$ is a finite
+set of demographic groups. A model $f_\theta$ produces a logit
+$z_i = f_\theta(x_i)$, a probability $p_i = \sigma(z_i)$ with
+$\sigma(\cdot)$ the logistic function, and a hard decision
+$\hat{y}_i = \mathbf{1}[p_i \geq 0.5]$.
+
+\subsection{Why a Surrogate Is Necessary}
+
+The evaluation criteria of Section~\ref{sec:setup} are defined on the hard
+decisions $\hat{y}_i$. The map $p_i \mapsto \mathbf{1}[p_i \geq 0.5]$ has zero
+derivative almost everywhere and is undefined at the threshold, so any
+objective written in terms of $\hat{y}$ has no usable gradient and cannot be
+minimized by backpropagation. We therefore construct \emph{differentiable
+surrogates} that operate on the probabilities $p_i$ directly, and verify
+empirically (Section~\ref{sec:surrogate}) that each surrogate tracks the hard
+metric it stands in for.
+
+\subsection{Group Term: Soft Demographic Parity}
+
+The demographic parity difference is the largest gap in selection rate between
+any two groups. Replacing the selection rate with the mean predicted
+probability gives a differentiable analogue:
+\begin{equation}
+\softdp(p, s) \;=\; \max_{g \in \mathcal{S}} \bar{p}_g \;-\; \min_{g \in \mathcal{S}} \bar{p}_g ,
+\qquad
+\bar{p}_g \;=\; \frac{1}{|\mathcal{I}_g|}\sum_{i \in \mathcal{I}_g} p_i ,
+\label{eq:softdp}
+\end{equation}
+where $\mathcal{I}_g = \{ i : s_i = g \}$. Equation~\eqref{eq:softdp} is
+differentiable in $\theta$ through $p$, and converges to the hard demographic
+parity difference as the probabilities saturate towards $\{0,1\}$.
+
+\subsection{Individual Term: Soft Generalized Entropy}
+
+Following Speicher et al.~\cite{speicher2018unified} we define the
+\emph{benefit} received by individual $i$ as
+\begin{equation}
+b_i \;=\; 1 + p_i - y_i .
+\label{eq:benefit}
+\end{equation}
+A correctly served individual has $b_i \approx 1$; a false positive receives
+more than deserved ($b_i \to 2$) and a false negative less ($b_i \to 0$).
+Individual unfairness is then the \emph{inequality} of the benefit vector,
+measured by the generalized entropy index of order $\gamma$:
+\begin{equation}
+\softge(p,y) \;=\; \frac{1}{n\,\gamma(\gamma-1)} \sum_{i=1}^{n}
+\left[ \left( \frac{b_i}{\bar{b}} \right)^{\gamma} - 1 \right],
+\label{eq:softge}
+\end{equation}
+where $\bar{b} = n^{-1}\sum_i b_i$ is the mean benefit.
+We use $\gamma = 2$ throughout, for which \eqref{eq:softge} equals half the
+squared coefficient of variation of $b$. The index is zero exactly when every
+individual receives identical benefit, and grows as the burden of the model's
+errors concentrates on fewer people. Because $b_i$ depends on $p_i$ smoothly,
+\eqref{eq:softge} is differentiable.
+
+\subsection{The Composite Loss}
+
+The two fairness terms are combined with the accuracy term into a single
+objective with two interpolation weights $\alpha, \beta \in [0,1]$:
+\begin{equation}
+\boxed{\;
+\mathcal{L}(\theta)
+= \alpha\,\mathcal{L}_{\mathrm{BCE}}
++ (1-\alpha)\Big[\beta\,\softdp + (1-\beta)\,\softge\Big] \;}
+\label{eq:composite}
+\end{equation}
+where $\mathcal{L}_{\mathrm{BCE}}$ is binary cross-entropy computed from
+logits for numerical stability. The two parameters have distinct roles:
+
+\begin{itemize}
+\item $\alpha$ trades \emph{accuracy against fairness}. At $\alpha=1$ the loss
+      reduces to plain cross-entropy, giving the unconstrained baseline. As
+      $\alpha \to 0$ accuracy is ignored entirely, which yields degenerate
+      constant predictors (Section~\ref{sec:selection}).
+\item $\beta$ trades \emph{group against individual fairness}, and is the
+      variable of interest in this study. At $\beta=1$ the fairness budget is
+      spent entirely on demographic parity; at $\beta=0$ entirely on benefit
+      equality; intermediate values blend them.
+\end{itemize}
+
+Sweeping $\beta$ at fixed $\alpha$ therefore holds the total fairness pressure
+constant while redistributing it between the two notions---which is exactly
+the comparison needed to isolate a trade-off between them.
+
+\subsection{Models}
+
+We instantiate \eqref{eq:composite} with two model families, chosen to span a
+linear and a nonlinear hypothesis class while remaining standard in the
+fairness literature:
+\begin{itemize}
+\item \textbf{Logistic regression}: a single affine layer returning a logit.
+\item \textbf{MLP (64--64)}: two hidden layers of 64 units with ReLU
+      activations, returning a logit.
+\end{itemize}
+Both return logits rather than probabilities; the sigmoid is applied once,
+inside the loss.
+
+\subsection{Training and Selection Procedure}
+\label{sec:selection}
+
+Algorithm~\ref{alg:sweep} states the full procedure. Training uses
+Adam~\cite{kingma2015adam} with learning rate $0.01$ and weight decay
+$10^{-4}$, for at most $300$ epochs, with early stopping on the validation
+value of the \emph{same} composite loss being optimized (patience $20$) and
+restoration of the best weights from a deep copy. Because \eqref{eq:softdp}
+requires all groups to be present in order to form a group gap, each epoch is
+a single full-batch gradient step rather than a pass of mini-batches.
+
+\begin{algorithm}[t]
+\caption{$\alpha\times\beta$ sweep with validation-only selection}
+\label{alg:sweep}
+\begin{algorithmic}[1]
+\Require dataset $D$, seed set $S$, grids $A$ (for $\alpha$), $B$ (for $\beta$)
+\For{each seed $k \in S$}
+  \State $(D_{\text{tr}},D_{\text{va}},D_{\text{te}}) \gets \textproc{Split}(D, 60/20/20, k)$
+  \State fit scaler and encoder on $D_{\text{tr}}$; apply to all splits
+  \For{each architecture $a$ and each $(\alpha,\beta) \in A \times B$}
+     \State seed weights with $k$; initialise $f_\theta$
+     \State train $f_\theta$ on $D_{\text{tr}}$ minimising \eqref{eq:composite}
+     \State early-stop on $\mathcal{L}$ evaluated on $D_{\text{va}}$
+     \State record test metrics, and validation accuracy,
+            \dpdtwo{} and positive rate
+  \EndFor
+  \State \textbf{// selection uses validation quantities only}
+  \State $F \gets \{(\alpha,\beta) : \alpha < 1,\;
+         0.05 \le \widehat{r}_{\text{va}} \le 0.95 \}$
+  \State $(\alpha^\ast,\beta^\ast) \gets
+         \arg\min_{F} \sqrt{(1-\mathrm{acc}_{\text{va}})^2
+         + \mathrm{DPD}_{2,\text{va}}^{2}}$
+  \State report test metrics at $(\alpha^\ast,\beta^\ast)$
+\EndFor
+\State aggregate over $S$; paired Wilcoxon test with Holm correction
+\end{algorithmic}
+\end{algorithm}
+
+Two details in Algorithm~\ref{alg:sweep} matter for the validity of the
+results. First, \emph{test metrics are never used for selection}: the
+$(\alpha,\beta)$ pair is chosen by distance to the utopia point
+$(\text{accuracy}=1, \dpdtwo=0)$ computed on validation data alone. Second,
+the constraint $0.05 \le \widehat{r}_{\text{va}} \le 0.95$ on the validation
+positive rate $\widehat{r}_{\text{va}}$ excludes near-constant predictors: a
+model that assigns every individual to one class attains
+$\dpdtwo = 0$ trivially while being useless. This guard is not cosmetic---at
+$\alpha=0$ we observe validation positive rates above $0.99$.
+
+\subsection{Pipeline Overview}
+
+Fig.~\ref{fig:pipeline} summarizes the complete experimental pipeline from raw
+data to reported results.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  node distance=3.2mm,
+  every node/.style={font=\scriptsize},
+  box/.style={rectangle, rounded corners=1.5pt, draw=black!70, thick,
+              text width=0.80\columnwidth, align=center, inner sep=2.4pt,
+              minimum height=6.2mm, fill=black!3},
+  hi/.style={box, fill=blue!8, draw=blue!55},
+  sm/.style={rectangle, rounded corners=1.5pt, draw=black!70,
+             text width=0.375\columnwidth, align=center, inner sep=2.4pt,
+             minimum height=8.5mm, fill=black!3},
+  ar/.style={-{Latex[length=1.6mm]}, thick, draw=black!70}
+]
+\node[box] (data) {\textbf{Data}: COMPAS ($n{=}6{,}172$), German ($n{=}1{,}000$),
+                   Adult ($n{=}45{,}222$)};
+\node[hi, below=of data] (filt) {\textbf{Soundness filters}: ProPublica row
+                   filters; \emph{drop label-leaking} \texttt{duration}};
+\node[box, below=of filt] (split) {\textbf{Per-seed split} $60/20/20$,
+                   seeds $0$--$9$};
+\node[box, below=of split] (prep) {\textbf{Preprocessing} (fit on train only):
+                   StandardScaler $+$ one-hot};
+\node[sm] (sweep) at ([xshift=-0.205\columnwidth, yshift=-11mm]prep.south)
+      {$\boldsymbol{\alpha\times\beta}$ \textbf{sweep}\\
+       $7\times7$, 2 archs\\ $2{,}940$ models};
+\node[sm] (base)  at ([xshift= 0.205\columnwidth, yshift=-11mm]prep.south)
+      {\textbf{Baselines}\\ Reweighing, ExpGrad,\\ ThreshOpt, RF, XGB};
+\node[hi] (sel) at ([yshift=-24mm]prep.south)
+                  {\textbf{Selection on validation only}
+                   $+$ degeneracy guard};
+\node[box, below=of sel] (eval) {\textbf{Test evaluation}: Acc, \dpdtwo{},
+                   EOD, \getwo{}};
+\node[box, below=of eval] (agg) {\textbf{Aggregate over 10 seeds};
+                   Wilcoxon $+$ Holm};
+\node[hi, below=of agg] (res) {\textbf{Trade-off map}:
+                   accuracy--fairness frontiers, $\beta$ cross-effect curves,
+                   master and ablation tables};
+
+\draw[ar] (data) -- (filt);
+\draw[ar] (filt) -- (split);
+\draw[ar] (split) -- (prep);
+\draw[ar] (prep.south) -- ++(0,-3.2mm) -| (sweep.north);
+\draw[ar] (prep.south) -- ++(0,-3.2mm) -| (base.north);
+\draw[ar] (sweep.south) |- ([yshift=-3.2mm]sweep.south) -| (sel.north);
+\draw[ar] (base.south)  |- ([yshift=-3.2mm]base.south)  -| (sel.north);
+\draw[ar] (sel) -- (eval);
+\draw[ar] (eval) -- (agg);
+\draw[ar] (agg) -- (res);
+\end{tikzpicture}
+\caption{Experimental pipeline. Shaded boxes mark the three steps that most
+affect the validity of the conclusions: removal of the label-leaking COMPAS
+feature, selection performed strictly on validation data with a
+degenerate-predictor guard, and reporting of the resulting trade-off map.}
+\label{fig:pipeline}
+\end{figure}

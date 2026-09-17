@@ -1,0 +1,117 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  Mapping the Group--Individual Fairness Trade-off
+%  IEEE conference format (IEEEtran, conference option)
+%
+%  COMPILE:  main.tex   (pdfLaTeX + BibTeX)
+%  On Overleaf: Menu -> Compiler -> pdfLaTeX, then Recompile.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+% ---- Bibliography / citation -------------------------------------------------
+\usepackage{cite}
+
+% ---- Math --------------------------------------------------------------------
+\usepackage{amsmath,amssymb,amsfonts}
+
+% ---- Algorithms --------------------------------------------------------------
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+% ---- Graphics and tables -----------------------------------------------------
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{textcomp}
+
+% ---- Diagrams ----------------------------------------------------------------
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,calc}
+
+% ---- URLs (loaded last among link-ish packages) ------------------------------
+\usepackage{url}
+\urlstyle{same}
+
+% ---- Convenience macros ------------------------------------------------------
+\newcommand{\dpdtwo}{\ensuremath{\mathrm{DPD}_{2}}}
+\newcommand{\getwo}{\ensuremath{\mathrm{GE}(2)}}
+\newcommand{\softdp}{\ensuremath{\mathcal{L}_{\mathrm{DP}}}}
+\newcommand{\softge}{\ensuremath{\mathcal{L}_{\mathrm{GE}}}}
+% compact "mean +- std" for wide tables: \ms{0.676}{0.012}
+\newcommand{\ms}[2]{\ensuremath{#1_{\pm #2}}}
+% significance marker
+\newcommand{\sig}[1]{\textsuperscript{#1}}
+
+% IEEEtran discourages \paragraph-style spacing changes; keep defaults.
+\begin{document}
+
+\title{Mapping the Group--Individual Fairness Trade-off:\\
+An Empirical Study with a Differentiable Composite Loss}
+
+\author{\IEEEauthorblockN{Tanushree Nepal}
+\IEEEauthorblockA{\textit{Department of Computer Science and Cybersecurity} \\
+\textit{University of Central Missouri}\\
+Warrensburg, MO, USA \\
+txn99360@ucmo.edu}
+}
+
+\maketitle
+
+\begin{abstract}
+Algorithmic fairness is not a single objective. \emph{Group} fairness asks
+that demographic groups receive comparable treatment on average, while
+\emph{individual} fairness asks that the burden of a model's errors be
+distributed evenly across the people subject to it. Theoretical results
+establish that such criteria are frequently incompatible, but the
+\emph{magnitude} of the resulting trade-off on real data is far less
+documented. We introduce a differentiable composite loss whose single
+parameter $\beta$ interpolates continuously between a soft demographic-parity
+term and a soft generalized-entropy term, and we use it as an instrument to
+map the trade-off empirically. Sweeping a $7\times7$ grid over the
+accuracy--fairness weight $\alpha$ and the group--individual weight $\beta$,
+across three standard datasets (COMPAS, German Credit, Adult), two model
+families (logistic regression and a multilayer perceptron), and ten random
+seeds, we train and evaluate $2{,}940$ models. We observe a statistically
+significant \emph{double dissociation}: optimizing the group term reduces the
+demographic parity difference by up to $89\%$ but significantly worsens
+individual-fairness inequality and, on Adult, degrades equalized odds by a
+factor of $3.3$; optimizing the individual term significantly improves
+individual fairness while leaving group disparity unchanged or slightly worse.
+The composite loss attains group-fairness levels comparable to established
+pre-, in-, and post-processing baselines. We further report a negative result
+with a concrete diagnosis: on German Credit no effect survives significance
+testing, and we show this is a failure of \emph{validation-based model
+selection} at $n=1000$---validation and test demographic parity are
+essentially uncorrelated ($r=0.08$, versus $0.94$ and $0.99$ on the other two
+datasets)---rather than a failure of the method. Our results quantify a
+trade-off that practitioners must resolve by policy, not by tuning.
+\end{abstract}
+
+\begin{IEEEkeywords}
+algorithmic fairness, group fairness, individual fairness, demographic parity,
+generalized entropy index, fairness--accuracy trade-off, differentiable
+surrogate loss
+\end{IEEEkeywords}
+
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_method}
+\input{sections/04_experimental_setup}
+\input{sections/05_results}
+\input{sections/06_discussion}
+\input{sections/07_limitations}
+\input{sections/08_conclusion}
+
+\section*{Reproducibility}
+All experiments run on CPU. The complete pipeline---data loading, the
+$\alpha\times\beta$ sweep, baselines, significance testing, and every figure
+and table in this paper---is reproducible with two commands, and per-seed
+result files are written for all $2{,}940$ trained models.
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}

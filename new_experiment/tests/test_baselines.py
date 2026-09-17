@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from baselines import kamiran_calders_weights
 
 
@@ -29,3 +30,32 @@ def test_xgboost_reference_predicts_binary():
     pred = xgboost_reference(X[:150], y[:150], X[150:], seed=0)
     assert set(np.unique(pred)) <= {0, 1}
     assert (pred == y[150:]).mean() > 0.8
+
+
+def test_matches_aif360_reference_implementation():
+    """Our four-line Reweighing must agree with AIF360's reference version.
+
+    AIF360's Reweighing only accepts a binary privileged/unprivileged
+    partition, so this checks the binary-sensitive-attribute case; our
+    version additionally handles the >2-group case (COMPAS race) natively.
+    """
+    aif360_datasets = pytest.importorskip("aif360.datasets")
+    aif360_pre = pytest.importorskip("aif360.algorithms.preprocessing")
+    import pandas as pd
+
+    rng = np.random.default_rng(0)
+    s = rng.integers(0, 2, size=2000).astype(float)
+    # label correlated with the sensitive attribute, so weights are non-trivial
+    y = (rng.random(2000) < np.where(s == 1, 0.7, 0.3)).astype(float)
+
+    ours = kamiran_calders_weights(y, s)
+
+    bld = aif360_datasets.BinaryLabelDataset(
+        df=pd.DataFrame({"sens": s, "label": y}),
+        label_names=["label"], protected_attribute_names=["sens"])
+    theirs = aif360_pre.Reweighing(
+        unprivileged_groups=[{"sens": 0.0}],
+        privileged_groups=[{"sens": 1.0}]).fit_transform(bld).instance_weights
+
+    assert not np.allclose(ours, 1.0)          # guard: the test data is skewed
+    assert np.allclose(ours, theirs)

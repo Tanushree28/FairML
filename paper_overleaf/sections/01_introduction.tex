@@ -1,0 +1,77 @@
+\section{Introduction}
+\label{sec:intro}
+
+Machine-learned models increasingly mediate consequential decisions about
+people: whether a defendant is labelled high-risk, whether an applicant
+receives credit, whether a r\'esum\'e is advanced. A decade of work has
+established that such models can encode and amplify disparities present in
+their training data~\cite{angwin2016machine,buolamwini2018gender,mehrabi2021survey}.
+What is far less settled is what should be done about it---because
+``fairness'' is not one property but a family of mutually inconsistent ones.
+
+Two families dominate practice. \emph{Group fairness} requires that outcomes
+be comparable across demographic groups; its canonical instance, demographic
+parity, requires equal selection rates. \emph{Individual fairness} requires
+that similar individuals be treated similarly~\cite{dwork2012fairness}, and in
+its influential outcome-based operationalization requires that the
+\emph{benefit} each person derives from the classifier be distributed evenly
+across the population~\cite{speicher2018unified}. These are different
+requirements, and satisfying one does not imply satisfying the other.
+
+That they can conflict is known theoretically. Calibration and error-rate
+balance cannot generally hold at once when base rates
+differ~\cite{kleinberg2016inherent,chouldechova2017fair}; demographic parity
+and equalized odds are likewise incompatible under the same
+condition~\cite{barocas2019fairness}. What these results do \emph{not} supply
+is a magnitude. A practitioner told that ``you cannot have both'' still needs
+to know what one costs in units of the other, on data resembling their own,
+with uncertainty quantified. Comparative empirical studies of fairness
+interventions exist~\cite{friedler2019comparative}, but they typically compare
+\emph{discrete methods}, each committed in advance to a single fairness
+notion. What is missing is a study that varies the fairness objective
+\emph{continuously} and measures both families of metrics along the way.
+
+\subsection{Contributions}
+
+We build such an instrument and use it to map the trade-off.
+
+\begin{enumerate}
+\item \textbf{A differentiable composite loss} (Section~\ref{sec:method}) whose
+      parameter $\beta$ interpolates continuously between a soft
+      demographic-parity term and a soft generalized-entropy term, with a
+      second parameter $\alpha$ controlling the overall weight on fairness
+      versus accuracy. Both fairness terms are computed on raw predicted
+      probabilities so that gradients flow through them---the thresholding
+      step that defines the evaluation metrics is not differentiable and
+      cannot be optimized directly.
+\item \textbf{An empirical trade-off map} (Section~\ref{sec:results}) built
+      from a $7\times7$ $(\alpha,\beta)$ grid across three standard datasets,
+      two model families, and ten seeds: $2{,}940$ trained models, all metrics
+      reported as mean~$\pm$~standard deviation with paired significance tests.
+\item \textbf{A statistically significant double dissociation.} Optimizing the
+      group term reduces the demographic parity difference by $78\%$--$89\%$
+      ($p_{\text{Holm}}=0.008$) while significantly \emph{worsening}
+      individual-fairness inequality; optimizing the individual term
+      significantly improves individual fairness while leaving group disparity
+      unchanged or significantly worse. On Adult, driving demographic parity
+      to near zero degrades equalized odds by a factor of $3.3$, an empirical
+      instance of a known impossibility.
+\item \textbf{A diagnosed negative result.} On German Credit no effect
+      survives correction. We show this is not a failure of the method but of
+      \emph{validation-based model selection at small $n$}: validation and
+      test demographic parity are effectively uncorrelated
+      ($r=0.08$ versus $0.94$ and $0.99$ elsewhere), so the selection rule
+      cannot identify fair configurations. Under a pre-specified
+      configuration the effect is present. We believe this sample-size floor
+      on fairness model selection is of independent practical interest.
+\item \textbf{A benchmark soundness correction.} We identify and remove a
+      label-leaking feature from a COMPAS feature set in prior use, and report
+      the honest accuracy that results.
+\end{enumerate}
+
+The composite loss is the \emph{instrument}; the trade-off map is the
+\emph{contribution}. We do not claim a new state of the art in fairness
+mitigation, and Section~\ref{sec:results} shows the loss matches rather than
+beats established baselines on group-fairness metrics. Its value is that,
+unlike those baselines, it exposes a continuous dial between two fairness
+notions, which is precisely what mapping a trade-off requires.

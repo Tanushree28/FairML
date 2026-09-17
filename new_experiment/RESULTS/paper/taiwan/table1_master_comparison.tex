@@ -1,0 +1,16 @@
+\begin{tabular}{lrllllll}
+\toprule
+Model & Seeds & Accuracy & Demographic Parity Difference & DPD (Largest 2 Groups) & Equalized Odds Difference & Theil Index & Gini Coefficient \\
+\midrule
+Logistic Regression baseline & 10 & 0.812 ± 0.006 & 0.011 ± 0.005 & 0.011 ± 0.005 & 0.019 ± 0.011 & 0.114 ± 0.005 & 0.918 ± 0.005 \\
+Fair Logistic Regression & 10 & 0.816 ± 0.005 & 0.010 ± 0.006 & 0.010 ± 0.006 & 0.023 ± 0.013 & 0.108 ± 0.004 & 0.885 ± 0.014 \\
+MLP (64-64) baseline & 10 & 0.821 ± 0.005 & 0.033 ± 0.009 & 0.033 ± 0.009 & 0.038 ± 0.017 & 0.104 ± 0.004 & 0.876 ± 0.005 \\
+Fair MLP (64-64) & 10 & 0.821 ± 0.007 & 0.014 ± 0.008 & 0.014 ± 0.008 & 0.021 ± 0.012 & 0.104 ± 0.005 & 0.877 ± 0.008 \\
+ExpGrad LogReg (Demographic Parity) & 10 & 0.812 ± 0.006 & 0.013 ± 0.008 & 0.013 ± 0.008 & 0.020 ± 0.015 & 0.114 ± 0.005 & 0.926 ± 0.003 \\
+ExpGrad LogReg (Equalized Odds) & 10 & 0.812 ± 0.006 & 0.016 ± 0.007 & 0.016 ± 0.007 & 0.022 ± 0.014 & 0.114 ± 0.005 & 0.927 ± 0.004 \\
+ThresholdOptimizer LogReg (Demographic Parity) & 10 & 0.817 ± 0.006 & 0.006 ± 0.003 & 0.006 ± 0.003 & 0.040 ± 0.020 & 0.108 ± 0.005 & 0.891 ± 0.007 \\
+Reweighing LogReg (Kamiran-Calders) & 10 & 0.811 ± 0.006 & 0.005 ± 0.004 & 0.005 ± 0.004 & 0.029 ± 0.015 & 0.115 ± 0.005 & 0.927 ± 0.004 \\
+Random Forest (no fairness) & 10 & 0.817 ± 0.005 & 0.031 ± 0.006 & 0.031 ± 0.006 & 0.031 ± 0.012 & 0.106 ± 0.003 & 0.872 ± 0.005 \\
+XGBoost (no fairness) & 10 & 0.819 ± 0.006 & 0.034 ± 0.004 & 0.034 ± 0.004 & 0.035 ± 0.013 & 0.105 ± 0.004 & 0.876 ± 0.004 \\
+\bottomrule
+\end{tabular}

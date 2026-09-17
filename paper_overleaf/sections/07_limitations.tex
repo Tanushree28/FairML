@@ -1,0 +1,80 @@
+\section{Limitations}
+\label{sec:limitations}
+
+We state the constraints on these results explicitly, since several bear
+directly on how the numbers should be read.
+
+\subsubsection{The individual-fairness notion is outcome-based, not Lipschitz}
+We measure individual fairness as inequality of the benefit vector following
+Speicher et al.~\cite{speicher2018unified}. This requires no similarity metric,
+which is why it is computable here, but it does not establish the
+``similar individuals treated similarly'' property of
+Dwork et al.~\cite{dwork2012fairness}. Claims in this paper about individual
+fairness should be read as claims about the distribution of benefit.
+
+\subsubsection{\getwo{} on hard predictions is a function of the error profile}
+With $\hat{y} \in \{0,1\}$ the benefit takes only three values,
+$b_i \in \{0,1,2\}$, so \getwo{} is determined by the counts of false
+positives and false negatives. It is a legitimate inequality measure of the
+error distribution, but it does not distinguish \emph{which} individuals bear
+those errors.
+
+\subsubsection{Equalized odds on COMPAS is unreliable}
+Unlike \dpdtwo{}, our EOD is computed over all six race groups, two of which
+contain $31$ and $11$ individuals in total. The resulting statistic has a
+standard deviation of $0.13$--$0.22$ across seeds and no COMPAS EOD comparison
+reaches significance. COMPAS EOD values in Tables~\ref{tab:master}
+and~\ref{tab:ablation} should be treated as uninformative; a largest-two-groups
+EOD would be the appropriate fix and is left to future work.
+
+\subsubsection{German Credit is underpowered}
+At $n=1000$ the test split contains $200$ rows and validation-based selection
+does not function (Section~\ref{sec:german}). The dataset supports the
+pre-specified contrast we report but not tuned model selection.
+
+\subsubsection{Full-batch training}
+Because \eqref{eq:softdp} requires every group to be present to form a group
+gap, each epoch is one full-batch gradient step, capped at $300$. Mini-batch
+behaviour of the composite loss---including whether stochastic group
+composition destabilises \softdp{}---is untested and would be required before
+applying this at larger scale.
+
+\subsubsection{Fixed threshold}
+The differentiable models decide at a fixed $0.5$ threshold, whereas the
+ThresholdOptimizer baseline is permitted group-specific thresholds. The
+comparison in Table~\ref{tab:master} is therefore not threshold-matched.
+
+\subsubsection{The selection rule embeds a value judgement}
+Minimising $\sqrt{(1-\mathrm{acc})^2 + \mathrm{DPD}_2^2}$ treats one point of
+accuracy as equal to one point of disparity, and is sensitive to the scale of
+each term (Table~\ref{tab:selection}). A different scalarization would select
+different models. The ablation results of Section~\ref{sec:rq1}, which fix
+$\beta$ rather than selecting it, do not depend on this choice.
+
+\subsubsection{Single, binary sensitive attribute}
+Each dataset is analysed with respect to one attribute, and no intersectional
+analysis (for example race $\times$ sex on Adult) is performed. Subgroup
+fairness is known to behave differently from marginal group
+fairness~\cite{kearns2018preventing}.
+
+\subsubsection{Inconsistent positive-class polarity}
+The positive class is the adverse outcome on COMPAS and German Credit and the
+favourable outcome on Adult. Directions of the fairness metrics are unaffected,
+but a statement such as ``group $A$ is selected more often'' has opposite
+welfare meanings across datasets.
+
+\subsubsection{Sensitive attribute used as an input}
+Retaining the sensitive attribute is deliberate and standard in this setting,
+but it is a modelling choice with legal implications in some jurisdictions,
+and results may differ where its use is prohibited.
+
+\subsubsection{Adversarial debiasing not evaluated}
+All three mitigation families are represented, but a second in-processing
+method~\cite{zhang2018mitigating} was not run.
+
+\subsubsection{Scope}
+Conclusions are limited to binary classification on tabular data with the
+three datasets studied. Benchmark-specific artefacts are
+documented~\cite{bao2021its,ding2021retiring,fabris2022algorithmic}, and the
+COMPAS leakage correction of Section~\ref{sec:setup} is one such case we
+encountered directly.

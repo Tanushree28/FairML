@@ -43,6 +43,33 @@ def test_adult_loads_with_sex_sensitive():
     assert "fnlwgt" not in X.columns      # sampling weight, standard exclusion
 
 
+def test_taiwan_loads_with_sex_sensitive():
+    ds = load_dataset("taiwan", seed=0)
+    assert ds["sensitive_col"] == "SEX"
+    total = len(ds["y_train"]) + len(ds["y_val"]) + len(ds["y_test"])
+    assert total == 30000
+    assert set(ds["sens"]["test"].unique()) == {"male", "female"}
+    from data_loading import _load_taiwan_frame
+    X, y, sens = _load_taiwan_frame()
+    assert abs(y.mean() - 0.2212) < 0.001    # UCI-documented default rate
+    assert "default" not in X.columns
+
+
+def test_acs_employment_loads_with_sex_sensitive():
+    ds = load_dataset("acs_employment", seed=0)
+    assert ds["sensitive_col"] == "SEX"
+    assert len(ds["y_train"]) + len(ds["y_val"]) + len(ds["y_test"]) == 50000
+    assert set(ds["sens"]["test"].unique()) == {"male", "female"}
+
+
+def test_acs_pubcov_restricted_to_white_and_black():
+    ds = load_dataset("acs_pubcov", seed=0)
+    assert ds["sensitive_col"] == "RAC1P"
+    assert len(ds["y_train"]) + len(ds["y_val"]) + len(ds["y_test"]) == 50000
+    for split in ("train", "val", "test"):
+        assert set(ds["sens"][split].unique()) == {"White", "Black"}
+
+
 def test_adult_seed7_rare_category_does_not_crash():
     # native-country has a single Holand-Netherlands row; for seed 7 it falls
     # outside the training split and used to crash the OneHotEncoder.

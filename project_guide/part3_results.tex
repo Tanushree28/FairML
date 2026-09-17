@@ -1,0 +1,591 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 5. FLOWCHART
+\section{Methodology Flowchart}
+
+Figure~\ref{fig:guide-pipeline} shows the complete pipeline as actually
+implemented. Note that the generic template
+(data $\to$ preprocessing $\to$ feature engineering $\to$ model $\to$ evaluation)
+is modified in two ways for this project: there is \textbf{no feature
+engineering stage} (deliberate --- features are used as published), and the
+model stage \textbf{branches} into the sweep and the baselines before rejoining
+at evaluation.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  every node/.style={font=\small},
+  box/.style={rectangle, rounded corners=2pt, draw=ink!70, thick,
+              text width=0.72\textwidth, align=center, inner sep=5pt,
+              minimum height=9mm, fill=black!3},
+  hi/.style={box, fill=accentlt, draw=accent, very thick},
+  sm/.style={rectangle, rounded corners=2pt, draw=ink!70, thick,
+             text width=0.335\textwidth, align=center, inner sep=5pt,
+             minimum height=14mm, fill=black!3},
+  ar/.style={-{Latex[length=2.6mm]}, thick, draw=ink!75}
+]
+\node[box] (data) {\textbf{DATA SOURCES}\\[1pt]
+  \footnotesize COMPAS ($n{=}6{,}172$, race) \textbullet\ German Credit
+  ($n{=}1{,}000$, sex) \textbullet\ Adult ($n{=}45{,}222$, sex)};
+
+\node[hi, below=5mm of data] (filt) {\textbf{SOUNDNESS FILTERS}\\[1pt]
+  \footnotesize ProPublica row filters \textbullet\ \textbf{drop leaking
+  \code{duration}} ($r={-}0.78$, mechanical)};
+
+\node[box, below=5mm of filt] (split) {\textbf{PER-SEED SPLIT} (seeds 0--9)\\[1pt]
+  \footnotesize 60\% train / 20\% validation / 20\% test};
+
+\node[box, below=5mm of split] (prep) {\textbf{PREPROCESSING} (fit on TRAIN only)\\[1pt]
+  \footnotesize numeric $\to$ StandardScaler \textbullet\ categorical $\to$
+  OneHot(drop=first) \textbullet\ sensitive attr $\to$ shared integer codes};
+
+\node[sm] (sweep) at ([xshift=-0.185\textwidth, yshift=-16mm]prep.south)
+  {\textbf{$\boldsymbol{\alpha \times \beta}$ SWEEP}\\[1pt]
+   \footnotesize $7\times7$ grid, 2 architectures\\
+   \footnotesize Adam, full-batch, early stop\\
+   \footnotesize \textbf{2{,}940 models}};
+
+\node[sm] (base) at ([xshift=0.185\textwidth, yshift=-16mm]prep.south)
+  {\textbf{BASELINES}\\[1pt]
+   \footnotesize Reweighing (pre)\\
+   \footnotesize ExpGrad DP/EO (in), ThreshOpt (post)\\
+   \footnotesize RandomForest, XGBoost};
+
+\node[hi] (sel) at ([yshift=-44mm]prep.south)
+  {\textbf{MODEL SELECTION --- VALIDATION SET ONLY}\\[1pt]
+   \footnotesize keep $\alpha<1$ \textbullet\ guard $0.05 \le$ pos.\ rate $\le 0.95$
+   \textbullet\ $\arg\min \sqrt{(1-\mathrm{acc})^2 + \mathrm{DPD}_2^2}$};
+
+\node[box, below=5mm of sel] (eval) {\textbf{EVALUATION ON TEST} (threshold $0.5$)\\[1pt]
+  \footnotesize Accuracy \textbullet\ DPD (all) \textbullet\ \dpdtwo{}
+  \textbullet\ EOD \textbullet\ \getwo{} \textbullet\ Gini};
+
+\node[box, below=5mm of eval] (agg) {\textbf{AGGREGATION OVER 10 SEEDS}\\[1pt]
+  \footnotesize mean $\pm$ std \textbullet\ paired Wilcoxon signed-rank
+  \textbullet\ Holm correction};
+
+\node[hi, below=5mm of agg] (res) {\textbf{RESULTS \& CONCLUSION}\\[1pt]
+  \footnotesize Pareto frontiers \textbullet\ $\beta$ cross-effect curves
+  \textbullet\ ablation \textbullet\ master comparison\\
+  \footnotesize $\Rightarrow$ empirical map of the group $\leftrightarrow$
+  individual fairness trade-off};
+
+\draw[ar] (data) -- (filt);
+\draw[ar] (filt) -- (split);
+\draw[ar] (split) -- (prep);
+\draw[ar] (prep.south) -- ++(0,-5mm) -| (sweep.north);
+\draw[ar] (prep.south) -- ++(0,-5mm) -| (base.north);
+\draw[ar] (sweep.south) |- ([yshift=-6mm]sweep.south) -| (sel.north);
+\draw[ar] (base.south)  |- ([yshift=-6mm]base.south)  -| (sel.north);
+\draw[ar] (sel) -- (eval);
+\draw[ar] (eval) -- (agg);
+\draw[ar] (agg) -- (res);
+\end{tikzpicture}
+\caption{The complete pipeline. Highlighted boxes are the three steps that most
+affect the validity of the conclusions.}
+\label{fig:guide-pipeline}
+\end{figure}
+
+\clearpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 6. RESULTS
+\section{Understanding Our Results}
+
+\subsection{Headline: the \texorpdfstring{$\beta$}{beta} ablation --- this is the paper}
+
+This is the cleanest evidence for RQ1. It holds $\alpha$ fixed and moves $\beta$
+between the extremes, so the \emph{amount} of fairness pressure is constant and
+only its \emph{composition} changes.
+
+\begin{center}
+\small
+\textbf{COMPAS, Logistic Regression ($\alpha = 0.75$)}\\[3pt]
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Variant} & \textbf{Accuracy} & \textbf{\dpdtwo{}} $\downarrow$ & \textbf{\getwo{}} $\downarrow$ \\
+\midrule
+No fairness ($\alpha{=}1$) & $0.676 \pm 0.012$ & $0.304 \pm 0.049$ & $0.191 \pm 0.012$ \\
+\rowcolor{goodlt} SoftGE only ($\beta{=}0$) & $0.674 \pm 0.012$ & $\mathbf{0.305} \pm 0.049$ & $\mathbf{0.181} \pm 0.010$ \\
+\rowcolor{warnlt} SoftDP only ($\beta{=}1$) & $0.650 \pm 0.014$ & $\mathbf{0.067} \pm 0.053$ & $\mathbf{0.217} \pm 0.021$ \\
+Blend ($\beta{=}0.5$) & $0.660 \pm 0.021$ & $0.092 \pm 0.065$ & $0.204 \pm 0.026$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Read it row by row --- this is the whole story:}
+\begin{itemize}
+\item Optimising \textbf{individual fairness alone} ($\beta=0$): \getwo{}
+improves $0.191 \to 0.181$ ($-5\%$). \dpdtwo{} is \textbf{completely unmoved}:
+$0.304 \to 0.305$. It does nothing for group fairness.
+\item Optimising \textbf{group fairness alone} ($\beta=1$): \dpdtwo{} collapses
+$0.304 \to 0.067$ ($\mathbf{-78\%}$). But \getwo{} gets \textbf{worse}:
+$0.191 \to 0.217$ ($+14\%$) --- \emph{worse than doing nothing at all}.
+\item The blend sits in between on both.
+\end{itemize}
+
+The same pattern appears on Adult, and it is statistically significant. Full
+ablation with Holm-corrected significance:
+
+\begin{center}
+\scriptsize
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+\textbf{Dataset} & \textbf{Variant} & \textbf{Accuracy} & \textbf{\dpdtwo{}} & \textbf{EOD} & \textbf{\getwo{}} \\
+\midrule
+\multirow{3}{*}{COMPAS}
+ & No fairness            & $0.676$ & $0.304$ & $0.789$ & $0.191$ \\
+ & SoftGE only ($\beta{=}0$) & $0.674$ & $0.305$\ \textsc{ns} & $0.811^{*}$ & $\mathbf{0.181^{**}}$ \\
+ & SoftDP only ($\beta{=}1$) & $0.650^{**}$ & $\mathbf{0.067^{**}}$ & $0.681$\ \textsc{ns} & $\mathbf{0.217^{**}}$ \\
+\midrule
+\multirow{3}{*}{German}
+ & No fairness            & $0.730$ & $0.046$ & $0.090$ & $0.175$ \\
+ & SoftGE only ($\beta{=}0$) & $0.730$\ \textsc{ns} & $0.050$\ \textsc{ns} & $0.106$\ \textsc{ns} & $0.170$\ \textsc{ns} \\
+ & SoftDP only ($\beta{=}1$) & $0.731$\ \textsc{ns} & $0.029$\ \textsc{ns} & $0.103$\ \textsc{ns} & $0.173$\ \textsc{ns} \\
+\midrule
+\multirow{3}{*}{Adult}
+ & No fairness            & $0.845$ & $0.184$ & $0.107$ & $0.084$ \\
+ & SoftGE only ($\beta{=}0$) & $0.845$\ \textsc{ns} & $\mathbf{0.189^{**}}$ & $0.113^{*}$ & $\mathbf{0.083^{*}}$ \\
+ & SoftDP only ($\beta{=}1$) & $0.833^{**}$ & $\mathbf{0.040^{**}}$ & $\mathbf{0.246^{**}}$ & $\mathbf{0.094^{**}}$ \\
+\bottomrule
+\end{tabular}
+\\[3pt]
+\footnotesize Logistic regression. $^{**}p_{\mathrm{Holm}}<0.01$,
+$^{*}p_{\mathrm{Holm}}<0.05$, \textsc{ns} $=$ not significant.
+\end{center}
+
+\begin{keybox}[The result, stated precisely: a double dissociation]
+\begin{enumerate}
+\item Group fairness $\leftarrow$ group objective: \textbf{strong} effect
+($-78\%$ DPD, $p_{\mathrm{Holm}} = 0.008$, consistent across datasets and
+architectures).
+\item Individual fairness $\leftarrow$ individual objective: \textbf{weak but
+real and significant} effect ($-5\%$ GE, $p_{\mathrm{Holm}} \le 0.012$).
+\item \textbf{The cross-effects are negative in both directions.} Optimising
+group fairness significantly \emph{harms} individual fairness. Optimising
+individual fairness leaves group fairness unchanged (COMPAS) or significantly
+\emph{worse} (Adult).
+\end{enumerate}
+\textbf{Is this good? Yes --- it is an excellent result}, because it is clean,
+replicated, and significant in both directions.
+\end{keybox}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{double_dissociation.pdf}
+\caption{The double dissociation as percentage change from baseline. Purple
+($\beta=0$, individual-only) lowers GE(2) but not DPD. Red ($\beta=1$,
+group-only) crushes DPD but raises GE(2). German shows no significant movement
+in either direction.}
+\end{figure}
+
+\textbf{Why the asymmetry (effect 1 strong, effect 2 weak)?} This is itself a
+finding, not a flaw. SoftDP directly manipulates a quantity the model controls
+freely --- the group-wise mean of predicted probabilities --- and can shift it
+by moving the decision surface, which costs little accuracy. SoftGE is bounded
+by irreducible prediction error: benefit is equal only when everyone is
+predicted equally correctly, so you \emph{cannot} equalise benefit without
+actually being more accurate. On COMPAS, where the accuracy ceiling is about
+$0.68$, there is very little room.
+
+\subsection{The \texorpdfstring{$\beta$}{beta} cross-effect curves}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{beta_cross_effect.pdf}
+\caption{The trade-off seen continuously. As $\beta$ moves from individual-only
+(0) to group-only (1), the group metric (red) falls and the individual metric
+(purple) rises. The \textbf{crossing curves} on COMPAS and Adult are the
+result; German is flat because there is almost no disparity to remove.}
+\end{figure}
+
+\subsection{Fair model versus baseline (the selected models)}
+
+Holm-corrected $p$-values for the selected fair model against its matched
+baseline:
+
+\begin{center}
+\small
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+\textbf{Dataset} & \textbf{Arch} & \textbf{Accuracy} & \textbf{\dpdtwo{}} & \textbf{EOD} & \textbf{\getwo{}} \\
+\midrule
+COMPAS & LR  & $\mathbf{0.008}$ & $\mathbf{0.008}$ & $0.232$ & $\mathbf{0.027}$ \\
+COMPAS & MLP & $\mathbf{0.018}$ & $\mathbf{0.008}$ & $0.863$ & $0.863$ \\
+German & LR  & $1.000$ & $1.000$ & $1.000$ & $0.422$ \\
+German & MLP & $1.000$ & $1.000$ & $1.000$ & $1.000$ \\
+Adult  & LR  & $\mathbf{0.008}$ & $\mathbf{0.008}$ & $\mathbf{0.008}$ & $\mathbf{0.008}$ \\
+Adult  & MLP & $\mathbf{0.008}$ & $\mathbf{0.008}$ & $\mathbf{0.008}$ & $\mathbf{0.008}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{COMPAS --- good result}
+\dpdtwo{} drops $0.304 \to 0.061$ (LR), an \textbf{80\% reduction}, at a cost of
+$1.5$ accuracy points ($0.676 \to 0.661$). Both significant. \getwo{} worsens
+$0.191 \to 0.200$, also significant. \textbf{Verdict: good.} A five-fold
+fairness improvement for $1.5$ points of accuracy is a favourable exchange rate
+by the standards of this literature, and the individual-fairness cost is
+measured rather than hidden.
+
+\subsubsection{Adult --- the strongest and most interpretable result}
+\dpdtwo{} $0.184 \to 0.021$ ($\mathbf{-89\%}$), accuracy $0.845 \to 0.830$
+($-1.5$ points), EOD $0.107 \to \mathbf{0.279}$ ($2.6\times$ \emph{worse}),
+\getwo{} $0.084 \to 0.095$. All four significant, all four moving in the same
+direction across all ten seeds.
+
+\begin{keybox}[Why Adult's ``bad'' EOD number is the best result in the paper]
+Adult's base rates are $0.114$ (female) vs $0.312$ (male) --- a $2.7\times$ gap.
+Theory says you cannot have demographic parity and equalized odds
+simultaneously under unequal base rates. Your experiment shows exactly that, at
+the predicted magnitude. This is a \textbf{textbook confirmation}, and you
+should present it as one. The exchange rate is roughly one point of DPD for
+$1.1$ points of EOD.
+\end{keybox}
+
+\subsection{The German Credit null result --- and its real cause}
+\label{sec:guide-german}
+
+On German, \textbf{nothing is significant} --- not one metric, not one
+architecture. This must be reported as a null result, not buried. But the
+common-sense explanation (``the dataset is small'') is only half right, and the
+naive explanation (``the method doesn't work here'') is \textbf{wrong}.
+
+\subsubsection{The decisive diagnostic}
+Model selection ranks configurations by \emph{validation} DPD. So: does
+validation DPD predict test DPD?
+
+\begin{center}
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Dataset} & $r$(val DPD, test DPD) & \textbf{SNR} & \textbf{acc:DPD term ratio} \\
+\midrule
+COMPAS & $0.94$ & $1.68$ & $1.1\times$ \\
+Adult  & $0.99$ & $12.91$ & $0.7\times$ \\
+\rowcolor{warnlt} German & $\mathbf{0.08}$ & $\mathbf{0.45}$ & $\mathbf{34.9\times}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+On German, validation DPD carries \textbf{essentially no information} about test
+DPD. Selection is choosing at random with respect to fairness. With a 200-row
+validation split containing $\approx 62$ women, the standard error of a
+selection rate is $\approx \pm 0.04$ --- the size of the entire signal. German
+is also the only dataset where the seed noise (SNR $0.45$) is \emph{larger} than
+the between-configuration signal.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{selection_diagnostic.pdf}
+\caption{Validation versus test \dpdtwo{} across sweep configurations. On COMPAS
+and Adult the points hug the diagonal --- validation predicts test. On German
+they form a cloud.}
+\end{figure}
+
+\subsubsection{A second, independent problem: the rule is scale-blind}
+The selection rule minimises $\sqrt{(1-\mathrm{acc})^2 + \mathrm{DPD}^2}$. At
+German's baseline, $(1-\mathrm{acc}) = 0.270$ but $\mathrm{DPD} = 0.046$, so in
+squared terms the accuracy term dominates by \textbf{34.9$\boldsymbol\times$}.
+The rule collapses to ``maximise accuracy'' and is nearly blind to fairness ---
+even with perfect, noise-free data. On COMPAS ($1.1\times$) and Adult
+($0.7\times$) the terms are coincidentally balanced, which is why it works
+there.
+
+\begin{example}[The method \emph{does} work on German --- selection just can't find it]
+Bypass selection entirely and fix the group-fairness extreme $\beta = 1$:
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+German, LogReg & Test \dpdtwo{} & Accuracy & Seeds improved \\
+\midrule
+Baseline ($\alpha{=}1$) & $0.046$ & $0.730$ & --- \\
+$\alpha{=}0.5,\ \beta{=}1$ & $\mathbf{0.024}$ & $\mathbf{0.729}$ & $8/10$ ($p=0.020$) \\
+\midrule
+What selection actually picked & $0.047$ & $0.726$ & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+A \textbf{48\% disparity reduction at zero accuracy cost} was available. The
+utopia rule walked straight past it --- across ten seeds it picked
+$\beta$ values averaging $0.19$, with \emph{three seeds choosing $\beta = 0$}
+(no group-fairness weight at all).
+
+\medskip
+\textbf{Caution:} $\alpha=0.5$ gives $p=0.020$ but $\alpha=0.75$ gives
+$p=0.193$. Do not cherry-pick $\alpha$ --- that would be exactly the test-set
+selection avoided everywhere else. Cite the \emph{pre-specified} ablation
+contrast instead.
+\end{example}
+
+\begin{keybox}[How to frame German in the paper]
+Not ``the method fails on German.'' Instead: \emph{the selection procedure fails
+on German, and here is the diagnostic proving it.} This is a genuinely useful
+methodological finding --- \textbf{validation-based fairness model selection has
+a sample-size floor} --- because fairness metrics are differences of
+\emph{conditional} rates, so their effective sample size is set by the smallest
+group, not by $n$.
+\end{keybox}
+
+\subsection{Comparison against established baselines (RQ3)}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lcc@{\hspace{2.5em}}cc@{}}
+\toprule
+& \multicolumn{2}{c}{\textbf{COMPAS}} & \multicolumn{2}{c}{\textbf{Adult}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+\textbf{Method} & Accuracy & \dpdtwo{} & Accuracy & \dpdtwo{} \\
+\midrule
+Reweighing        & $0.656$ & $\mathbf{0.034}$ & $0.840$ & $0.090$ \\
+ExpGrad (DP)      & $0.658$ & $\mathbf{0.035}$ & $0.830$ & $\mathbf{0.013}$ \\
+ThresholdOptimizer& $0.663$ & $0.037$ & $0.827$ & $\mathbf{0.009}$ \\
+\rowcolor{accentlt} \textbf{Ours (Fair LR)} & $0.661$ & $0.061$ & $0.830$ & $0.021$ \\
+\rowcolor{accentlt} \textbf{Ours (Fair MLP)} & $0.669$ & $0.082$ & $0.836$ & $0.026$ \\
+XGBoost (no fairness) & $0.655$ & $0.228$ & $\mathbf{0.868}$ & $0.181$ \\
+Random Forest         & $0.624$ & $0.164$ & $0.843$ & $0.193$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{warnbox}[Honest verdict: competitive, not superior]
+At matched accuracy, the dedicated group-fairness methods reach modestly lower
+DPD than the composite loss. \textbf{Do not oversell this --- and you don't need
+to.} Your contribution is the trade-off map, not a new state of the art.
+
+The correct framing: \emph{``the composite loss achieves group-fairness levels
+comparable to established methods, which establishes it as a credible
+instrument for probing the trade-off --- and unlike those methods, it exposes a
+continuous, controllable interpolation between the two fairness notions.''}
+None of ExpGrad, ThresholdOptimizer, or Reweighing has a $\beta$-equivalent.
+That is your differentiator.
+\end{warnbox}
+
+One more useful observation: \textbf{XGBoost on Adult} has the highest accuracy
+($0.868$) \emph{and} one of the largest disparities ($0.181$). The most accurate
+model is among the least fair --- a clean one-sentence motivation for the whole
+paper.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{pareto_frontiers.pdf}
+\caption{Accuracy versus \dpdtwo{}. Faint points are sweep configurations, solid
+lines the Pareto fronts, markers the baselines with error bars.}
+\end{figure}
+
+\subsection{What can we reasonably conclude?}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.47\textwidth}p{0.47\textwidth}@{}}
+\toprule
+\textcolor{good}{\textbf{Supported by our data}} &
+\textcolor{warn}{\textbf{NOT supported --- do not claim}} \\
+\midrule
+A group-fairness objective produces large, significant reductions in group
+metrics (up to $-89\%$ DPD) at $\approx1.5$ accuracy points, where a disparity
+exists. &
+That our method beats established baselines. It doesn't; it matches them. \\
+\addlinespace
+That improvement carries a \emph{measured} cost to individual fairness
+($+5$--$14\%$ GE) and, on Adult, a severe cost to equalized odds
+($2.3$--$3.3\times$). &
+Anything about individual fairness in the Dwork ``similar individuals'' sense
+--- GE(2) is an inequality-of-outcomes measure. \\
+\addlinespace
+An individual-fairness objective improves individual fairness weakly and group
+fairness not at all. &
+Any COMPAS EOD conclusion --- that column is noise-dominated by 11-person
+groups. \\
+\addlinespace
+The pattern holds across two architectures and two of three datasets; the third
+is explained, not contradictory. &
+Any conclusion resting on the Gini column --- it is $1-$selection rate. \\
+\addlinespace
+The composite loss reaches group-fairness levels comparable to
+Reweighing / ExpGrad / ThresholdOptimizer. &
+Generalisation beyond tabular binary classification with a single sensitive
+attribute. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\clearpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 7. PAPER PREPARATION
+\section{Research Paper Preparation}
+
+What belongs in each section, based on the methodology and results above.
+
+\subsection{Introduction}
+\begin{itemize}
+\item Open with concrete stakes: COMPAS, credit, hiring. One sentence, no
+melodrama.
+\item Establish that ``fairness'' is not one thing --- group vs individual, with
+a one-line intuition for each.
+\item State the gap: impossibility results tell us the definitions conflict
+\emph{in principle}; far less work measures \emph{how much}, with error bars,
+across datasets.
+\item State the contribution list explicitly (reviewers look for this):
+(1) a differentiable composite loss with a single interpolation parameter;
+(2) an empirical trade-off map over 2{,}940 models;
+(3) significance-tested comparison against all three mitigation families;
+(4) a documented label-leakage correction to a COMPAS feature set.
+\item Preview the headline: $-89\%$ DPD on Adult at $-1.5$ accuracy points,
+with EOD $2.6\times$ worse.
+\end{itemize}
+
+\subsection{Related Work / Literature Review}
+Four blocks:
+\begin{enumerate}
+\item \textbf{Group fairness definitions \& methods} --- demographic parity,
+equalized odds (Hardt et al.\ 2016), Reweighing (Kamiran \& Calders 2012),
+ExponentiatedGradient (Agarwal et al.\ 2018). Cite what you actually ran.
+\item \textbf{Individual fairness} --- Dwork et al.\ (2012) Lipschitz
+formulation; Speicher et al.\ (2018) benefit-vector formulation. \textbf{Be
+explicit that you use the Speicher operationalisation, not the Dwork one}, and
+say why (computable without a similarity metric).
+\item \textbf{Impossibility \& tension results} --- Kleinberg et al.\ (2016);
+Chouldechova (2017); Barocas, Hardt \& Narayanan. This is the theory your Adult
+result empirically confirms.
+\item \textbf{COMPAS as a benchmark and its critiques} --- ProPublica's
+analysis, the rebuttals, and the feature-set/leakage literature. This is where
+your \code{duration} fix lives.
+\end{enumerate}
+Position the gap in one sentence: prior work either proves conflict
+theoretically or optimises one notion at a time; you \emph{interpolate
+continuously} and measure both.
+
+\subsection{Methodology}
+\begin{itemize}
+\item The loss equation, with SoftDP and SoftGE derived and the benefit vector
+explained.
+\item \textbf{Why surrogates are necessary} --- the thresholding step function
+has no gradient. Make this the motivating argument.
+\item Architectures, optimiser, full-batch training, early stopping.
+\item The validation-only utopia-distance selection rule and the $5\%$/$95\%$
+degeneracy guard, both with justification.
+\item \textbf{Do not put results here.}
+\end{itemize}
+
+\subsection{Experimental Setup}
+\begin{itemize}
+\item Dataset table: $n$, target, sensitive attribute, group sizes, per-group
+base rate, encoded dimensionality.
+\item Preprocessing: $60/20/20$ per seed, scaler + one-hot, fit on train only.
+Note splits are unstratified.
+\item The COMPAS filter list and the \code{duration} removal with its $-0.78$
+correlation and mechanical explanation. Frame the accuracy drop as correctness.
+\item Grid: $\alpha,\beta$ value lists; total model count.
+\item Ten seeds control split $+$ init $+$ stochastic baselines.
+\item Baseline configurations with hyperparameters.
+\item Metric definitions \textbf{with the corrected GE(2) naming}, and the
+largest-2-groups DPD with its tiny-group justification (quote the Asian $n=31$ /
+Native American $n=11$ numbers --- they make the argument for you).
+\item Statistical protocol, and note that $p = 1/512$ is the floor at $n=10$.
+\item Reproducibility: library versions, CPU-only, checkpoint caching, exact
+commands.
+\end{itemize}
+
+\subsection{Results}
+Order by strength, not by figure number:
+\begin{enumerate}
+\item \textbf{The $\beta$ cross-effect and ablation.} Lead with this; it is the
+contribution.
+\item \textbf{Fair vs baseline with significance.} COMPAS and Adult positive,
+German null.
+\item \textbf{Adult's DPD/EOD inversion} --- its own subsection, with the base
+rate numbers. Your theory-confirmation result.
+\item \textbf{Pareto frontiers with baselines overlaid} (RQ3).
+\item \textbf{German null result} --- its own short subsection with the
+selection diagnostic. Reporting it plainly is a credibility asset.
+\item \textbf{Supplementary} --- surrogate validation, seed-mean heatmaps.
+\end{enumerate}
+Every number as mean $\pm$ std over ten seeds. Every figure with error bars.
+
+\subsection{Discussion}
+\begin{itemize}
+\item Interpret the \textbf{asymmetry}: why the group objective works strongly
+and the individual objective weakly (freely controllable quantity vs a floor set
+by irreducible error).
+\item Interpret the \textbf{Adult inversion} as the empirical face of the
+impossibility theorem, with the exchange rate quantified.
+\item \textbf{What $\beta$ means for a practitioner}: not a hyperparameter to
+tune for performance, but a \emph{policy dial} encoding which fairness notion the
+institution has committed to. This is the most quotable idea in the paper.
+\item \textbf{Why German shows nothing}, and what it implies about model
+selection at small $n$.
+\item Position vs baselines honestly.
+\item The uncomfortable normative point: Adult MLP at $\beta=1$ gives DPD
+$0.009$ --- near-perfect demographic parity --- while making error rates markedly
+\emph{more} unequal. Fairer by one definition, less fair by another. Don't
+resolve it; that tension is the paper.
+\end{itemize}
+
+\subsection{Limitations}
+Be thorough --- it buys credibility, and every item is real and verifiable:
+\begin{enumerate}[itemsep=1pt]
+\item GE(2) is not Dwork-style individual fairness.
+\item Gini as implemented equals $1-$selection rate.
+\item COMPAS EOD (and all-groups DPD) dominated by groups of 11--31 people.
+\item German Credit underpowered at $n=1000$; selection unstable.
+\item Full-batch training, one gradient step per epoch, max 300 steps.
+\item Single binary/categorical sensitive attribute; no intersectional analysis.
+\item Fixed $0.5$ threshold, unlike ThresholdOptimizer.
+\item Utopia-distance selection implicitly weights 1 accuracy point $=$ 1 DPD
+point, and is scale-sensitive.
+\item Sensitive attribute included as a model input.
+\item Adversarial debiasing not run.
+\item Positive-class polarity inconsistent across datasets.
+\item Tabular binary classification only.
+\item Splits are unstratified.
+\end{enumerate}
+
+\subsection{Conclusion}
+Restate compactly: a differentiable composite loss lets $\beta$ interpolate
+continuously between group and individual fairness; sweeping it across three
+datasets, two architectures and ten seeds produces an empirical map showing the
+group objective strongly reduces group disparity ($-78\%$ to $-89\%$ DPD) at a
+small accuracy cost ($\approx1.5$ points) and a measurable cost to individual
+fairness and equalized odds; the individual objective helps individual fairness
+only weakly and group fairness not at all; the effect vanishes where the
+baseline is already near parity. Close on the practitioner-facing point:
+\textbf{$\beta$ is a policy parameter, not a tuning knob} --- the trade-off
+cannot be engineered away, only chosen.
+
+\subsection{Before you write: five fixes, ranked}
+
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}c p{0.27\textwidth} p{0.40\textwidth} p{0.11\textwidth}@{}}
+\toprule
+\textbf{\#} & \textbf{Issue} & \textbf{Why it matters} & \textbf{Effort} \\
+\midrule
+1 & Relabel ``Theil Index'' $\to$ \textbf{GE($\alpha{=}2$)} &
+Currently mislabelled against the standard definition; a knowledgeable reviewer
+will catch it. No numbers change. & Text only \\
+2 & Drop or relabel the Gini column &
+It is exactly $1-$selection rate; presenting it as individual fairness is not
+defensible. & Text only \\
+3 & Add largest-2-groups EOD for COMPAS, or caveat it &
+COMPAS EOD is currently pinned by groups of 11 and 31 people. & $\approx$10
+lines $+$ rerun \\
+4 & State explicitly: sensitive attribute is an input; training is full-batch;
+splits unstratified &
+All three are choices reviewers will ask about. & Text only \\
+5 & Frame German as a \emph{reported null result} with its diagnostic &
+Reporting it plainly is a credibility asset and it supports RQ2. & Text only \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{keybox}[Status]
+Fixes 1, 2, 4 and 5 have already been applied in the IEEE paper produced
+alongside this guide. Fix 3 is documented there as a stated limitation with the
+remedy named.
+\end{keybox}
+
+\vspace{1.2cm}
+\begin{center}
+\rule{0.5\textwidth}{0.4pt}\\[6pt]
+\small\textit{End of study guide.}
+\end{center}

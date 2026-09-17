@@ -1,0 +1,10 @@
+# Approximate 2018-era environment for the public Fairlearn v0.2.0 code.
+# The upstream setup.py at commit aeaa92d536406b54354a6c2db0d0ac5d14897782
+# only pins numpy/scipy/pandas as unversioned requirements, and the paper does
+# not publish an experiment lockfile. These versions are historically plausible
+# around June 2018, but are not established paper facts.
+python==3.6.*
+numpy==1.14.5
+scipy==1.1.0
+pandas==0.23.4
+scikit-learn==0.19.2

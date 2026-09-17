@@ -185,6 +185,19 @@ def master_table(dataset, out_dir, results_root=RESULTS):
     return df
 
 
+def seed_mean_selection(arch_sweep):
+    """(α*, β*) picked on validation seed means with the training utopia rule."""
+    mean = arch_sweep.groupby(["Alpha", "Beta"], as_index=False).mean(numeric_only=True)
+    fair = mean[(mean["Alpha"] < 1)
+                & mean["Val Positive Rate"].between(0.05, 0.95)].copy()
+    if fair.empty:
+        raise ValueError("no non-degenerate fair sweep points (all filtered by the positive-rate guard)")
+    fair["dist"] = np.sqrt((1 - fair["Val Accuracy"]) ** 2
+                           + fair["Val DPD (Largest 2 Groups)"] ** 2)
+    best = fair.sort_values("dist").iloc[0]
+    return best["Alpha"], best["Beta"]
+
+
 def ablation_table(dataset, out_dir, results_root=RESULTS):
     """No-fairness / SoftGE-only / SoftDP-only / blend, at the seed-mean-best α.
     Best (α, β) picked on validation seed means (same utopia rule as training)."""
@@ -192,15 +205,7 @@ def ablation_table(dataset, out_dir, results_root=RESULTS):
     rows = []
     for arch in ["logreg", "mlp"]:
         g = sweep[sweep["Arch"] == arch]
-        mean = g.groupby(["Alpha", "Beta"], as_index=False).mean(numeric_only=True)
-        fair = mean[(mean["Alpha"] < 1)
-                    & mean["Val Positive Rate"].between(0.05, 0.95)].copy()
-        if fair.empty:
-            raise ValueError("no non-degenerate fair sweep points (all filtered by the positive-rate guard)")
-        fair["dist"] = np.sqrt((1 - fair["Val Accuracy"]) ** 2
-                               + fair["Val DPD (Largest 2 Groups)"] ** 2)
-        best = fair.sort_values("dist").iloc[0]
-        a_star, b_star = best["Alpha"], best["Beta"]
+        a_star, b_star = seed_mean_selection(g)
         variants = [("No fairness (α=1)", 1, 0),
                     (f"SoftGE only (α={a_star}, β=0)", a_star, 0),
                     (f"SoftDP only (α={a_star}, β=1)", a_star, 1),

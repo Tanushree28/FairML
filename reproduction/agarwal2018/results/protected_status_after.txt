@@ -1,0 +1,26 @@
+M new_experiment/analysis/figures.py
+ M new_experiment/analysis/run_analysis.py
+ M new_experiment/dashboard/app.py
+ M new_experiment/data_loading.py
+ M new_experiment/run_experiment.py
+ M new_experiment/tests/test_baselines.py
+ M new_experiment/tests/test_data_loading.py
+ M requirements.txt
+?? data/acs_employment_ca2018.csv
+?? data/acs_pubcov_ca2018.csv
+?? data/folktables/
+?? data/taiwan_credit.csv
+?? new_experiment/MODELS/acs_employment/
+?? new_experiment/MODELS/acs_pubcov/
+?? new_experiment/MODELS/taiwan/
+?? new_experiment/MODELS/taiwan_edu/
+?? new_experiment/RESULTS/acs_employment/
+?? new_experiment/RESULTS/acs_pubcov/
+?? new_experiment/RESULTS/paper/acs_employment/
+?? new_experiment/RESULTS/paper/acs_pubcov/
+?? new_experiment/RESULTS/paper/cross_dataset/
+?? new_experiment/RESULTS/paper/taiwan/
+?? new_experiment/RESULTS/taiwan/
+?? new_experiment/RESULTS/taiwan_edu/
+?? new_experiment/analysis/cross_dataset.py
+?? new_experiment/tests/test_cross_dataset.py

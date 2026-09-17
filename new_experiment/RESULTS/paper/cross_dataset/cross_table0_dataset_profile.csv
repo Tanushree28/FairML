@@ -1,0 +1,7 @@
+Dataset,Role,n,Features (encoded),Positive rate,Groups compared,Label gap (pts),Smaller group in val split
+COMPAS (race),main,6172,12,0.4551198963058976,African-American vs Caucasian,13.22794208498545,417
+Adult (sex),main,45222,80,0.2478439697492371,Male vs Female,19.8901432678815,2993
+ACS Public Coverage (race),main,50000,42,0.3732,White vs Black,16.383537902328417,946
+ACS Employment (sex),boundary,50000,59,0.5704,female vs male,9.735601716346853,4937
+Taiwan Credit (sex),discussion,30000,26,0.2212,female vs male,3.3909465375304952,2396
+German Credit (sex),discussion,1000,21,0.3,male vs female,7.480130902290794,56

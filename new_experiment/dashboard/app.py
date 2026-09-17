@@ -33,6 +33,7 @@ DATASETS = {
     "COMPAS (recidivism — sensitive attribute: race)": "compas",
     "German Credit (credit risk — sensitive attribute: sex)": "german",
     "Adult (income > 50K — sensitive attribute: sex)": "adult",
+    "Taiwan Credit Default (default next month — sensitive attribute: sex)": "taiwan",
 }
 
 METRICS = [

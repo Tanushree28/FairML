@@ -1,0 +1,428 @@
+\section{Results}
+\label{sec:results}
+
+\subsection{Surrogate Validation}
+\label{sec:surrogate}
+
+Because training minimises the soft surrogates \eqref{eq:softdp} and
+\eqref{eq:softge} while evaluation uses hard-threshold metrics, we first check
+that the two agree. Fig.~\ref{fig:surrogate} plots each surrogate against the
+metric it stands in for, over all $2{,}940$ models.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{surrogate_validation.pdf}
+\caption{Training surrogate versus hard evaluation metric, all sweep points
+and all seeds. Top: \softdp{} against \dpdtwo{}. Bottom: \softge{} against
+\getwo{}. Correlations are strong on COMPAS and Adult; the weaker
+$r=0.625$ for \softdp{} on German reflects that dataset's $200$-row test
+split rather than a defect of the surrogate.}
+\label{fig:surrogate}
+\end{figure}
+
+Pearson correlations are $r = 0.794$ (COMPAS), $0.625$ (German) and $0.907$
+(Adult) for $\softdp \leftrightarrow \dpdtwo$, and $0.832$, $0.919$, $0.923$
+for $\softge \leftrightarrow \getwo$. The surrogates track their targets, with
+German's group surrogate the weakest link---an early indication of the
+small-sample behaviour analysed in Section~\ref{sec:german}.
+
+\subsection{RQ1: A Double Dissociation Between the Two Objectives}
+\label{sec:rq1}
+
+The cleanest test of a trade-off holds the total fairness weight fixed and
+moves only $\beta$. Table~\ref{tab:ablation} does this at the selected
+$\alpha^\ast$, comparing the two extremes---individual-only ($\beta=0$) and
+group-only ($\beta=1$)---against the unconstrained $\alpha=1$ baseline.
+Fig.~\ref{fig:dissociation} shows the same contrast as percentage change.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{double_dissociation.pdf}
+\caption{Percentage change from the unconstrained baseline when the fairness
+budget is spent entirely on the individual term ($\beta=0$, purple) or
+entirely on the group term ($\beta=1$, red), logistic regression. The two
+objectives improve the metric they target and leave or push the other in the
+wrong direction. Markers give Holm-corrected paired Wilcoxon significance
+($^{**}p<0.01$, $^{*}p<0.05$, ns $=$ not significant).}
+\label{fig:dissociation}
+\end{figure}
+
+The pattern is a double dissociation and it is consistent on the two datasets
+with a disparity to act on:
+
+\begin{itemize}
+\item \textbf{Group objective ($\beta=1$)} reduces \dpdtwo{} by $78\%$ on
+      COMPAS ($0.304 \to 0.067$) and $78\%$ on Adult ($0.184 \to 0.040$),
+      both $p_{\text{Holm}}=0.008$. It simultaneously \emph{worsens} \getwo{}
+      ($0.191 \to 0.217$ on COMPAS, $0.084 \to 0.094$ on Adult), both
+      $p_{\text{Holm}}=0.008$---i.e. worse individual fairness than doing
+      nothing at all.
+\item \textbf{Individual objective ($\beta=0$)} improves \getwo{}
+      ($0.191 \to 0.181$ on COMPAS, $0.084 \to 0.083$ on Adult, both
+      $p_{\text{Holm}} \le 0.012$) but does not improve \dpdtwo{}: it is
+      statistically unchanged on COMPAS ($0.304 \to 0.305$, $p=0.85$) and
+      significantly \emph{worse} on Adult ($0.184 \to 0.189$,
+      $p_{\text{Holm}}=0.008$).
+\end{itemize}
+
+The effects are asymmetric in size: the group term moves its target by nearly
+$80\%$, the individual term by around $5\%$. We interpret this in
+Section~\ref{sec:discussion}.
+
+\subsection{RQ2: Consistency Across Datasets and Architectures}
+
+Fig.~\ref{fig:beta} traces both metrics continuously across $\beta$ at fixed
+$\alpha=0.75$. On COMPAS and Adult, and for both architectures, the two curves
+cross: as $\beta$ increases the group metric falls monotonically while the
+individual metric rises monotonically. The MLP reproduces the logistic
+regression pattern closely, indicating the tension is not an artefact of a
+linear hypothesis class.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{beta_cross_effect.pdf}
+\caption{Group fairness (\dpdtwo{}, red) and individual fairness (\getwo{},
+purple) as $\beta$ moves from individual-only ($0$) to group-only ($1$), at
+$\alpha=0.75$. Bands are $\pm 1$ standard deviation over ten seeds. The
+crossing curves on COMPAS and Adult are the trade-off; German Credit is flat
+because its baseline disparity is already small.}
+\label{fig:beta}
+\end{figure}
+
+Fig.~\ref{fig:tradeoff} views the same data as a frontier in
+(\dpdtwo{}, \getwo{}) space, with $\beta$ encoded by colour: configurations
+sort along a diagonal from low-\getwo{}/high-\dpdtwo{} to
+high-\getwo{}/low-\dpdtwo{}. Appendix heatmaps
+(Figs.~\ref{fig:heatdpd}--\ref{fig:heatge}) show the full $\alpha \times \beta$
+surface for both metrics.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{dpd_vs_ge_tradeoff.pdf}
+\caption{Group versus individual fairness across all $\alpha<1$ sweep points
+(seed means), coloured by $\beta$. Points order along the diagonal by $\beta$,
+tracing the attainable trade-off surface.}
+\label{fig:tradeoff}
+\end{figure}
+
+\subsection{The Adult Parity--Odds Inversion}
+\label{sec:adult}
+
+Adult exhibits the trade-off in its sharpest form, involving two \emph{group}
+criteria. Driving demographic parity down drives equalized odds up: for the
+MLP at $\beta=1$, \dpdtwo{} falls from $0.182$ to $0.009$---essentially
+perfect demographic parity---while EOD rises from $0.097$ to $0.321$, a factor
+of $3.3$ (both $p_{\text{Holm}}=0.008$). For logistic regression the same
+contrast gives $0.184 \to 0.040$ on \dpdtwo{} against $0.107 \to 0.246$ on EOD.
+
+This is the empirical face of a known impossibility. Adult's group base rates
+differ by a factor of $2.7$ (Table~\ref{tab:datasets}), and under unequal base
+rates independence and separation cannot hold
+together~\cite{barocas2019fairness}. The contribution here is the exchange
+rate: on this dataset roughly one point of demographic parity is bought with
+$1.1$ points of equalized odds. A model can therefore be made near-perfectly
+``fair'' under one standard definition while becoming markedly less fair under
+another, and the reported number depends entirely on which definition the
+deploying institution has adopted.
+
+\subsection{RQ3: Comparison Against Established Baselines}
+
+Table~\ref{tab:master} reports every method on every dataset, and
+Fig.~\ref{fig:pareto} places the full sweep and the baselines in
+accuracy--\dpdtwo{} space.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{pareto_frontiers.pdf}
+\caption{Accuracy versus \dpdtwo{} (seed means). Faint points are individual
+sweep configurations; solid lines are the Pareto fronts per architecture;
+markers with error bars are the baselines ($\pm 1$ std over seeds). The
+composite-loss front reaches the same region as the dedicated
+group-fairness baselines.}
+\label{fig:pareto}
+\end{figure}
+
+The honest reading is that the composite loss is \emph{competitive but not
+superior} on group fairness. On COMPAS at comparable accuracy, Reweighing
+reaches $\dpdtwo=0.034$ and ExponentiatedGradient $0.035$, against $0.061$ for
+our selected model; on Adult, ThresholdOptimizer reaches $0.009$ and
+ExponentiatedGradient $0.013$, against $0.021$. Our MLP at
+$(0.836, 0.026)$ is nonetheless on the joint frontier, being more accurate
+than every baseline that achieves lower disparity.
+
+Two further observations are worth recording. First, the accuracy ceiling on
+Adult belongs to XGBoost at $0.868$, which also carries one of the largest
+disparities ($\dpdtwo = 0.181$)---the most accurate model is among the least
+fair. Second, ExponentiatedGradient with an equalized-odds constraint behaves
+on Adult exactly as the inversion of Section~\ref{sec:adult} predicts, in
+mirror image: it attains the best EOD of any method ($0.035$) while leaving
+\dpdtwo{} at $0.108$, an order of magnitude above the parity-constrained
+methods.
+
+\subsection{RQ2 Continued: The German Credit Null Result and Its Cause}
+\label{sec:german}
+
+On German Credit, no comparison between a selected fair model and its baseline
+survives Holm correction on any metric for either architecture (all
+$p_{\text{Holm}} \geq 0.42$; see Fig.~\ref{fig:fairvsbase}). We report this as
+a negative result and diagnose it, because the cause is not that the method
+fails.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fair_vs_baseline.pdf}
+\caption{Selected fair logistic regression against its unconstrained baseline
+(mean $\pm$ std over ten seeds), with Holm-corrected paired Wilcoxon markers.
+COMPAS and Adult show significant reductions in \dpdtwo{}; German shows no
+significant change on any metric.}
+\label{fig:fairvsbase}
+\end{figure}
+
+Two mechanisms combine, and Table~\ref{tab:selection} quantifies both.
+
+\subsubsection{Validation demographic parity is uninformative at $n=1000$}
+Selection ranks configurations by validation \dpdtwo{}. On German that
+quantity is essentially uncorrelated with the test value it is meant to
+predict ($r = 0.08$ for logistic regression, $0.11$ for the MLP), against
+$r \geq 0.89$ on COMPAS and $r \geq 0.99$ on Adult
+(Fig.~\ref{fig:selection}). With a $200$-row validation split containing
+roughly $62$ women, the standard error of a group selection rate is about
+$\pm 0.04$---the size of the entire signal. The between-configuration spread
+is smaller than the within-configuration seed noise
+(signal-to-noise $0.45$ versus $1.68$ and $12.9$). Selection is therefore
+ranking noise.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{selection_diagnostic.pdf}
+\caption{Validation versus test \dpdtwo{} across all non-degenerate sweep
+configurations (logistic regression). Dashed line is $y=x$. Validation
+demographic parity predicts its test counterpart on COMPAS and Adult but
+carries almost no information on German Credit.}
+\label{fig:selection}
+\end{figure}
+
+\subsubsection{The selection criterion is scale-sensitive}
+The utopia distance
+$\sqrt{(1-\mathrm{acc})^2 + \mathrm{DPD}_2^2}$ weights an accuracy point and a
+disparity point equally. That is reasonable when the two terms are comparable,
+as on COMPAS ($1.1\times$) and Adult ($0.7\times$), but on German the accuracy
+term exceeds the disparity term by a factor of $34.9$. The criterion
+degenerates to ``maximise accuracy'' and is nearly blind to fairness even
+before noise is considered. Consistent with this, the selected $\beta$
+averages only $0.19$ on German---with three of ten seeds selecting
+$\beta = 0$, i.e. no group-fairness weight at all---against $0.63$ on COMPAS
+and $0.58$ on Adult, and the selected configuration differs across $8$ of $10$
+seeds.
+
+\subsubsection{The effect exists under a pre-specified configuration}
+Bypassing selection entirely and fixing the group-fairness extreme
+$\beta=1$, German logistic regression attains
+$\dpdtwo = 0.024$ against a baseline $0.046$---a $48\%$ reduction---at
+\emph{no} accuracy cost ($0.729$ versus $0.730$), improving in $8$ of $10$
+seeds ($p = 0.020$, uncorrected). The pre-specified ablation contrast in
+Table~\ref{tab:ablation} shows the same direction ($0.046 \to 0.029$) though
+it does not survive correction. We conclude that the method reduces disparity
+on German, and that validation-based selection at this sample size cannot
+find the configurations that do so.
+
+% ---------------------------------------------------------------- Table: master
+\begin{table*}[t]
+\caption{Master comparison. Mean $\pm$ standard deviation over ten seeds,
+written $x_{\pm\sigma}$. Arrows give the preferred direction. \dpdtwo{} is the
+demographic parity difference on the two largest groups; for German and Adult
+it coincides with the all-groups value. Best value per column among all
+methods is in \textbf{bold}. Baseline families: Reweighing is
+pre-processing, ExpGrad in-processing, ThreshOpt post-processing. Fair models select $(\alpha,\beta)$ on validation
+data only.}
+\label{tab:master}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2.25pt}
+\begin{tabular}{@{}l cccc cccc cccc@{}}
+\toprule
+& \multicolumn{4}{c}{\textbf{COMPAS} (race)}
+& \multicolumn{4}{c}{\textbf{German Credit} (sex)}
+& \multicolumn{4}{c}{\textbf{Adult} (sex)} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
+\textbf{Method}
+& Acc$\uparrow$ & \dpdtwo{}$\downarrow$ & EOD$\downarrow$ & \getwo{}$\downarrow$
+& Acc$\uparrow$ & \dpdtwo{}$\downarrow$ & EOD$\downarrow$ & \getwo{}$\downarrow$
+& Acc$\uparrow$ & \dpdtwo{}$\downarrow$ & EOD$\downarrow$ & \getwo{}$\downarrow$ \\
+\midrule
+\multicolumn{13}{@{}l}{\textit{Unconstrained baselines}}\\
+Logistic regression
+& \ms{.676}{.012} & \ms{.304}{.049} & \ms{.789}{.151} & \ms{.191}{.012}
+& \ms{.730}{.040} & \ms{.046}{.018} & \textbf{\ms{.090}{.059}} & \ms{.175}{.035}
+& \ms{.845}{.004} & \ms{.184}{.007} & \ms{.107}{.030} & \ms{.084}{.002} \\
+MLP (64--64)
+& \textbf{\ms{.682}{.014}} & \ms{.284}{.044} & \ms{.829}{.151} & \textbf{\ms{.177}{.011}}
+& \ms{.724}{.034} & \ms{.060}{.052} & \ms{.106}{.064} & \ms{.164}{.027}
+& \ms{.851}{.004} & \ms{.182}{.008} & \ms{.097}{.024} & \ms{.080}{.003} \\
+Random Forest
+& \ms{.624}{.015} & \ms{.164}{.036} & \ms{.808}{.205} & \ms{.195}{.011}
+& \textbf{\ms{.742}{.036}} & \ms{.063}{.047} & \ms{.133}{.086} & \ms{.156}{.027}
+& \ms{.843}{.002} & \ms{.193}{.009} & \ms{.104}{.021} & \ms{.083}{.001} \\
+XGBoost
+& \ms{.655}{.010} & \ms{.228}{.045} & \ms{.791}{.181} & \ms{.196}{.011}
+& \ms{.738}{.036} & \ms{.067}{.066} & \ms{.152}{.102} & \textbf{\ms{.148}{.024}}
+& \textbf{\ms{.868}{.003}} & \ms{.181}{.008} & \ms{.087}{.023} & \textbf{\ms{.070}{.002}} \\
+\midrule
+\multicolumn{13}{@{}l}{\textit{This work: composite loss}}\\
+Fair LogReg (ours)
+& \ms{.661}{.013} & \ms{.061}{.047} & \ms{.683}{.173} & \ms{.200}{.010}
+& \ms{.725}{.040} & \ms{.044}{.027} & \ms{.107}{.057} & \ms{.166}{.035}
+& \ms{.830}{.003} & \ms{.021}{.016} & \ms{.279}{.034} & \ms{.095}{.002} \\
+Fair MLP (ours)
+& \ms{.669}{.018} & \ms{.082}{.047} & \ms{.766}{.181} & \ms{.181}{.014}
+& \ms{.716}{.035} & \ms{.069}{.052} & \ms{.127}{.082} & \ms{.162}{.036}
+& \ms{.836}{.004} & \ms{.026}{.015} & \ms{.281}{.031} & \ms{.091}{.003} \\
+\midrule
+\multicolumn{13}{@{}l}{\textit{Established mitigation baselines}}\\
+Reweighing
+& \ms{.656}{.013} & \textbf{\ms{.034}{.029}} & \textbf{\ms{.644}{.137}} & \ms{.205}{.011}
+& \ms{.734}{.034} & \ms{.049}{.033} & \ms{.118}{.078} & \ms{.162}{.025}
+& \ms{.840}{.003} & \ms{.090}{.007} & \ms{.149}{.029} & \ms{.088}{.002} \\
+ExpGrad (DP)
+& \ms{.658}{.012} & \ms{.035}{.024} & \ms{.766}{.216} & \ms{.200}{.010}
+& \ms{.730}{.030} & \ms{.042}{.042} & \ms{.104}{.086} & \ms{.163}{.022}
+& \ms{.830}{.003} & \ms{.013}{.008} & \ms{.300}{.014} & \ms{.096}{.002} \\
+ExpGrad (EO)
+& \ms{.637}{.021} & \ms{.044}{.029} & \ms{.737}{.206} & \ms{.206}{.015}
+& \ms{.728}{.034} & \textbf{\ms{.032}{.034}} & \ms{.106}{.054} & \ms{.164}{.025}
+& \ms{.836}{.004} & \ms{.108}{.007} & \textbf{\ms{.035}{.015}} & \ms{.090}{.003} \\
+ThreshOpt (DP)
+& \ms{.663}{.017} & \ms{.037}{.020} & \ms{.781}{.208} & \ms{.181}{.010}
+& \ms{.731}{.032} & \ms{.038}{.029} & \ms{.129}{.060} & \ms{.162}{.025}
+& \ms{.827}{.003} & \textbf{\ms{.009}{.006}} & \ms{.333}{.021} & \ms{.097}{.003} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+% ------------------------------------------------------------- Table: ablation
+\begin{table*}[t]
+\caption{Ablation over $\beta$ at the selected $\alpha^\ast$: the fairness
+budget is held fixed and redistributed between the two notions. Mean $\pm$
+std over ten seeds. Significance is a paired Wilcoxon test against the
+$\alpha=1$ row of the same block, Holm-corrected across the four metrics
+($^{**}p<0.01$, $^{*}p<0.05$; unmarked $=$ not significant). The double
+dissociation is visible in the \dpdtwo{} and \getwo{} columns: $\beta=1$
+improves the former and worsens the latter, $\beta=0$ does the reverse.}
+\label{tab:ablation}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3.6pt}
+\begin{tabular}{@{}ll cccc cccc@{}}
+\toprule
+& & \multicolumn{4}{c}{\textbf{Logistic Regression}}
+  & \multicolumn{4}{c}{\textbf{MLP (64--64)}} \\
+\cmidrule(lr){3-6}\cmidrule(lr){7-10}
+\textbf{Dataset} & \textbf{Variant}
+& Acc$\uparrow$ & \dpdtwo{}$\downarrow$ & EOD$\downarrow$ & \getwo{}$\downarrow$
+& Acc$\uparrow$ & \dpdtwo{}$\downarrow$ & EOD$\downarrow$ & \getwo{}$\downarrow$ \\
+\midrule
+\multirow{4}{*}{COMPAS}
+ & No fairness ($\alpha{=}1$)
+ & \ms{.676}{.012} & \ms{.304}{.049} & \ms{.789}{.151} & \ms{.191}{.012}
+ & \ms{.682}{.014} & \ms{.284}{.044} & \ms{.829}{.151} & \ms{.177}{.011} \\
+ & SoftGE only ($\beta{=}0$)
+ & \ms{.674}{.012} & \ms{.305}{.049} & \ms{.811}{.135}\sig{*} & \ms{.181}{.010}\sig{**}
+ & \ms{.685}{.014} & \ms{.274}{.041} & \ms{.842}{.138} & \ms{.170}{.011}\sig{**} \\
+ & SoftDP only ($\beta{=}1$)
+ & \ms{.650}{.014}\sig{**} & \ms{.067}{.053}\sig{**} & \ms{.681}{.167} & \ms{.217}{.021}\sig{**}
+ & \ms{.661}{.023}\sig{**} & \ms{.077}{.044}\sig{**} & \ms{.634}{.171}\sig{*} & \ms{.202}{.037}\sig{**} \\
+ & Blend ($\beta{=}\beta^\ast$)
+ & \ms{.660}{.021}\sig{**} & \ms{.092}{.065}\sig{**} & \ms{.678}{.159} & \ms{.204}{.026}\sig{*}
+ & \ms{.666}{.023}\sig{*} & \ms{.092}{.057}\sig{**} & \ms{.632}{.186}\sig{*} & \ms{.191}{.039} \\
+\midrule
+\multirow{4}{*}{German}
+ & No fairness ($\alpha{=}1$)
+ & \ms{.730}{.040} & \ms{.046}{.018} & \ms{.090}{.059} & \ms{.175}{.035}
+ & \ms{.724}{.034} & \ms{.060}{.052} & \ms{.106}{.064} & \ms{.164}{.027} \\
+ & SoftGE only ($\beta{=}0$)
+ & \ms{.730}{.037} & \ms{.050}{.028} & \ms{.106}{.066} & \ms{.170}{.032}
+ & \ms{.716}{.033} & \ms{.080}{.071} & \ms{.146}{.067} & \ms{.158}{.029} \\
+ & SoftDP only ($\beta{=}1$)
+ & \ms{.731}{.036} & \ms{.029}{.027} & \ms{.103}{.070} & \ms{.173}{.031}
+ & \ms{.726}{.032} & \ms{.038}{.032} & \ms{.124}{.102} & \ms{.172}{.028} \\
+ & Blend ($\beta{=}\beta^\ast$)
+ & \ms{.728}{.038} & \ms{.044}{.031} & \ms{.105}{.070} & \ms{.171}{.032}
+ & \ms{.721}{.035} & \ms{.039}{.043} & \ms{.105}{.056} & \ms{.168}{.030} \\
+\midrule
+\multirow{4}{*}{Adult}
+ & No fairness ($\alpha{=}1$)
+ & \ms{.845}{.004} & \ms{.184}{.007} & \ms{.107}{.030} & \ms{.084}{.002}
+ & \ms{.851}{.004} & \ms{.182}{.008} & \ms{.097}{.024} & \ms{.080}{.003} \\
+ & SoftGE only ($\beta{=}0$)
+ & \ms{.845}{.004} & \ms{.189}{.007}\sig{**} & \ms{.113}{.030}\sig{*} & \ms{.083}{.002}\sig{*}
+ & \ms{.851}{.004} & \ms{.191}{.007}\sig{**} & \ms{.097}{.015} & \ms{.079}{.002}\sig{**} \\
+ & SoftDP only ($\beta{=}1$)
+ & \ms{.833}{.003}\sig{**} & \ms{.040}{.008}\sig{**} & \ms{.246}{.023}\sig{**} & \ms{.094}{.002}\sig{**}
+ & \ms{.831}{.004}\sig{**} & \ms{.009}{.005}\sig{**} & \ms{.321}{.023}\sig{**} & \ms{.095}{.003}\sig{**} \\
+ & Blend ($\beta{=}\beta^\ast$)
+ & \ms{.833}{.003}\sig{**} & \ms{.040}{.008}\sig{**} & \ms{.246}{.023}\sig{**} & \ms{.094}{.002}\sig{**}
+ & \ms{.836}{.004}\sig{**} & \ms{.023}{.012}\sig{**} & \ms{.290}{.030}\sig{**} & \ms{.091}{.003}\sig{**} \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}
+\raggedright\scriptsize
+Selected $\alpha^\ast$: COMPAS $0.75$/$0.75$, German $0.75$/$0.5$, Adult
+$0.75$/$0.5$ (LR/MLP). Selected $\beta^\ast$: COMPAS $0.5$/$0.75$, German
+$0.05$/$0.75$, Adult $1.0$/$0.5$. For Adult logistic regression
+$\beta^\ast = 1$, so the blend row coincides with the group-only row.
+\end{table*}
+
+% ----------------------------------------------------------- Table: diagnostic
+\begin{table}[t]
+\caption{Why selection fails on German Credit. $r$ is the correlation between
+validation and test \dpdtwo{} over non-degenerate sweep configurations; SNR is
+the between-configuration spread of validation \dpdtwo{} divided by its
+within-configuration seed noise; the last column is the ratio of the accuracy
+term to the disparity term in the utopia-distance criterion.}
+\label{tab:selection}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llccc@{}}
+\toprule
+\textbf{Dataset} & \textbf{Arch.} & $r_{\text{val,test}}$ & \textbf{SNR}
+& \textbf{acc:DPD term} \\
+\midrule
+\multirow{2}{*}{COMPAS} & LR  & $0.94$ & $1.68$ & $1.1\times$ \\
+                        & MLP & $0.89$ & $1.54$ & $1.3\times$ \\
+\midrule
+\multirow{2}{*}{German} & LR  & $\mathbf{0.08}$ & $\mathbf{0.45}$ & $\mathbf{34.9\times}$ \\
+                        & MLP & $\mathbf{0.11}$ & $\mathbf{0.51}$ & $\mathbf{21.0\times}$ \\
+\midrule
+\multirow{2}{*}{Adult}  & LR  & $0.99$ & $12.91$ & $0.7\times$ \\
+                        & MLP & $0.99$ & $7.19$  & $0.7\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Supplementary: Sweep Surfaces}
+
+Figs.~\ref{fig:heatdpd} and~\ref{fig:heatge} give the full seed-averaged
+$\alpha \times \beta$ surfaces. The $\alpha=0$ row is retained for
+completeness but is excluded from selection: with no accuracy term the
+optimiser produces near-constant predictors whose apparent fairness is
+degenerate.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{heatmap_dpd.pdf}
+\caption{\dpdtwo{} over the $\alpha \times \beta$ grid (mean over ten seeds,
+logistic regression). Disparity falls as $\beta$ increases, most strongly at
+intermediate $\alpha$.}
+\label{fig:heatdpd}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{heatmap_ge.pdf}
+\caption{\getwo{} over the same grid. The gradient runs in the opposite
+direction to Fig.~\ref{fig:heatdpd} across $\beta$, which is the double
+dissociation viewed as a surface.}
+\label{fig:heatge}
+\end{figure}

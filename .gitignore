@@ -18,3 +18,7 @@ __pycache__/
 
 # Logs
 *.log
+
+# Regenerable caches
+data/folktables/
+new_experiment/MODELS/

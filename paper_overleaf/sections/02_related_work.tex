@@ -1,0 +1,78 @@
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Group Fairness Criteria and Mitigation}
+
+Group-fairness criteria constrain statistics of the prediction conditioned on
+a sensitive attribute. \emph{Demographic parity} equalizes selection rates;
+\emph{equalized odds} equalizes true- and false-positive rates across
+groups~\cite{hardt2016equality}; \emph{equal opportunity} equalizes true
+positive rates only. Surveys catalogue more than twenty such
+definitions~\cite{verma2018fairness,mehrabi2021survey}, many of which cannot
+hold simultaneously.
+
+Mitigation methods are conventionally grouped into three families, all three
+of which we use as baselines. \emph{Pre-processing} alters the training data:
+reweighing assigns each sample a weight making label and sensitive attribute
+independent in the weighted distribution~\cite{kamiran2012data}; related work
+repairs feature distributions directly~\cite{feldman2015certifying} or learns
+fair representations~\cite{zemel2013learning}. \emph{In-processing} alters the
+objective, either by adding fairness constraints or penalties to the training
+problem~\cite{zafar2017fairness}, by reduction to a sequence of cost-sensitive
+problems~\cite{agarwal2018reductions}, or adversarially~\cite{zhang2018mitigating}.
+\emph{Post-processing} adjusts a fixed model's outputs, typically via
+group-dependent thresholds~\cite{hardt2016equality}. Our method is
+in-processing; we compare against a representative of each family.
+
+\subsection{Individual Fairness}
+
+Dwork et al.~\cite{dwork2012fairness} formalize individual fairness as a
+Lipschitz condition: individuals who are similar under a task-specific metric
+must receive similar output distributions. The framework is principled but
+requires a similarity metric that is rarely available in practice.
+
+Speicher et al.~\cite{speicher2018unified} propose an outcome-based
+alternative that requires no similarity metric. For each individual they
+define a \emph{benefit} $b_i$ capturing how much that person received relative
+to what they were owed, and then apply an inequality index from the economics
+literature---the generalized entropy (GE) family~\cite{shorrocks1980class,cowell2011measuring}---to
+the benefit vector. This unifies group and individual unfairness: the GE index
+of the benefit vector decomposes additively into a between-group and a
+within-group component. We adopt this operationalization, and we are explicit
+throughout that it measures inequality of outcomes rather than the
+Lipschitz condition of~\cite{dwork2012fairness}.
+
+\subsection{Impossibility and Trade-off Results}
+
+Kleinberg et al.~\cite{kleinberg2016inherent} and
+Chouldechova~\cite{chouldechova2017fair} independently showed that
+calibration, balance for the positive class, and balance for the negative
+class cannot hold together unless base rates are equal or prediction is
+perfect. Corbett-Davies et al.~\cite{corbett2017algorithmic} characterize the
+cost of imposing parity constraints on a utility-maximizing decision rule.
+Barocas et al.~\cite{barocas2019fairness} give the general statement that
+independence (demographic parity) and separation (equalized odds) are
+incompatible whenever the sensitive attribute and label are dependent---the
+condition that holds in all three of our datasets.
+
+These results establish existence, not magnitude, and they concern conflicts
+\emph{within} group fairness. Our focus is the less-charted conflict
+\emph{between} group and individual fairness, measured rather than derived.
+
+\subsection{Empirical Comparisons and Benchmark Critique}
+
+Friedler et al.~\cite{friedler2019comparative} benchmark fairness-enhancing
+interventions across datasets and metrics, and emphasize that conclusions are
+sensitive to preprocessing and train/test splits---motivating our per-seed
+protocol. We extend this style of comparison along a new axis: rather than
+comparing methods that each fix a fairness notion, we vary the notion
+continuously within a single method.
+
+A parallel literature critiques the benchmarks themselves. Bao et
+al.~\cite{bao2021its} argue that COMPAS is routinely used in ways that
+misrepresent the underlying criminal-justice process; Fabris et
+al.~\cite{fabris2022algorithmic} survey the provenance of fairness datasets;
+Ding et al.~\cite{ding2021retiring} document defects in the standard Adult
+dataset and propose replacements. We contribute a concrete instance:
+Section~\ref{sec:setup} identifies a label-leaking feature in a COMPAS feature
+set and quantifies the inflated accuracy it produces.

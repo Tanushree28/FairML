@@ -26,6 +26,7 @@ Usage:
   python new_experiment/run_experiment.py                  # COMPAS, seed 42
   python new_experiment/run_experiment.py --dataset german
   python new_experiment/run_experiment.py --dataset both --seeds "0-9"
+  python new_experiment/run_experiment.py --dataset taiwan --seeds "0-9"
   python new_experiment/run_experiment.py --dataset all --seeds "0-2,7"
 """
 
@@ -356,7 +357,7 @@ def run_dataset(name, args, seed):
 
 def main():
     parser = argparse.ArgumentParser(description="Fixed fairness-loss experiment + model comparison")
-    parser.add_argument("--dataset", choices=["compas", "german", "adult", "both", "all"],
+    parser.add_argument("--dataset", choices=["compas", "german", "adult", "taiwan", "taiwan_edu", "acs_employment", "acs_pubcov", "both", "all"],
                         default="compas")
     parser.add_argument("--seeds", default="42",
                         help="comma list / ranges, e.g. '0-9' or '0-2,7'")
@@ -369,7 +370,7 @@ def main():
     args.seed_list = parse_seeds(args.seeds)
 
     dataset_map = {"both": ["compas", "german"],
-                   "all": ["compas", "german", "adult"]}
+                   "all": ["compas", "german", "adult", "taiwan"]}
     datasets = dataset_map.get(args.dataset, [args.dataset])
     start = time.perf_counter()
     for name in datasets:

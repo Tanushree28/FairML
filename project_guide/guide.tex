@@ -1,0 +1,565 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  FairML Project — Study Guide
+%  A ground-up explanation of the project: overview, terms, metrics,
+%  methodology, results, and paper preparation. With worked examples.
+%
+%  COMPILE: pdfLaTeX  (guide.tex)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage[table,dvipsnames]{xcolor}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,calc}
+\usepackage[htt]{hyphenat}
+\usepackage[hidelinks]{hyperref}
+\emergencystretch=3em
+\hbadness=2000
+
+% ---- palette -----------------------------------------------------------------
+\definecolor{ink}{HTML}{1F2933}
+\definecolor{accent}{HTML}{1F6F8B}
+\definecolor{accentlt}{HTML}{E8F1F4}
+\definecolor{warn}{HTML}{B45309}
+\definecolor{warnlt}{HTML}{FDF3E3}
+\definecolor{good}{HTML}{2F7A4E}
+\definecolor{goodlt}{HTML}{EAF4EE}
+\definecolor{rule}{HTML}{C9D3D9}
+
+\color{ink}
+
+% ---- headings ----------------------------------------------------------------
+\titleformat{\section}{\Large\bfseries\color{accent}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\large\bfseries\color{ink}}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{ink}}{\thesubsubsection}{0.5em}{}
+\titlespacing*{\section}{0pt}{2.2ex plus 1ex minus .2ex}{1.2ex plus .2ex}
+
+\pagestyle{fancy}\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyhead[L]{\small\color{accent}FairML — Project Study Guide}
+\fancyhead[R]{\small\thepage}
+
+% ---- boxes -------------------------------------------------------------------
+\newtcolorbox[auto counter,number within=section]{example}[1][]{
+  breakable, enhanced, colback=accentlt, colframe=accent,
+  boxrule=0.5pt, left=8pt, right=8pt, top=6pt, bottom=6pt, arc=2pt,
+  fonttitle=\bfseries\small, coltitle=white,
+  title={Worked Example~\thetcbcounter\ifx\relax#1\relax\else: #1\fi}}
+
+\newtcolorbox{warnbox}[1][]{
+  breakable, enhanced, colback=warnlt, colframe=warn,
+  boxrule=0.5pt, left=8pt, right=8pt, top=6pt, bottom=6pt, arc=2pt,
+  fonttitle=\bfseries\small, coltitle=white,
+  title={\ifx\relax#1\relax Caution\else#1\fi}}
+
+\newtcolorbox{keybox}[1][]{
+  breakable, enhanced, colback=goodlt, colframe=good,
+  boxrule=0.5pt, left=8pt, right=8pt, top=6pt, bottom=6pt, arc=2pt,
+  fonttitle=\bfseries\small, coltitle=white,
+  title={\ifx\relax#1\relax Key Idea\else#1\fi}}
+
+\newcommand{\dpdtwo}{\ensuremath{\mathrm{DPD}_{2}}}
+\newcommand{\getwo}{\ensuremath{\mathrm{GE}(2)}}
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\file}[1]{\textcolor{accent}{\texttt{\small #1}}}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\setlist[itemize]{leftmargin=1.3em,itemsep=2pt,topsep=3pt}
+\setlist[enumerate]{leftmargin=1.5em,itemsep=2pt,topsep=3pt}
+
+\begin{document}
+\sloppy
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TITLE PAGE
+\begin{titlepage}
+\centering
+\vspace*{2.5cm}
+{\Huge\bfseries\color{accent} FairML\par}
+\vspace{0.5cm}
+{\LARGE Project Study Guide\par}
+\vspace{0.8cm}
+{\large Understanding the group--individual fairness trade-off study\\
+from first principles\par}
+\vspace{1.4cm}
+\rule{0.75\textwidth}{0.8pt}\par
+\vspace{0.8cm}
+\begin{minipage}{0.8\textwidth}
+\centering\large
+Overview \,\textbullet\, Terminology \,\textbullet\, Metrics \,\textbullet\,
+Methodology \,\textbullet\, Results \,\textbullet\, Paper Preparation
+\end{minipage}
+\par\vspace{0.8cm}
+\rule{0.75\textwidth}{0.8pt}\par
+\vfill
+\begin{minipage}{0.85\textwidth}
+\small
+\textbf{How to read this document.} Every section starts with a plain-language
+explanation and then gives the technical version. Blue boxes are worked
+numerical examples you can verify by hand. Amber boxes flag things that are
+wrong, misleading, or easy to misread in the current project. Green boxes are
+the ideas worth memorising.
+
+\vspace{4pt}
+\textbf{Everything here is grounded in the actual code and result files.}
+Where a value has no accepted standard, this guide says so explicitly rather
+than inventing a threshold.
+\end{minipage}
+\vfill
+{\small Generated \today\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 1. PROJECT OVERVIEW
+\section{Project Overview}
+
+\subsection{What problem are we trying to solve?}
+
+When a machine-learning model makes decisions about people --- will this
+defendant re-offend? should this person get a loan? does this person earn more
+than \$50{,}000? --- it can be unfair in \textbf{two different ways}, and
+those two ways are not the same thing.
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.19\textwidth}p{0.35\textwidth}p{0.38\textwidth}@{}}
+\toprule
+\textbf{Kind of fairness} & \textbf{The question it asks} & \textbf{Example complaint} \\
+\midrule
+\textbf{Group fairness} &
+Are demographic groups treated equally \emph{on average}? &
+``Black defendants are flagged high-risk far more often than white defendants.'' \\
+\addlinespace
+\textbf{Individual fairness} &
+Are the model's mistakes spread evenly across \emph{individuals}, or do a few
+people absorb all the harm? &
+``Overall the groups look balanced, but a small set of people get wrecked by
+the errors.'' \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The uncomfortable part: \textbf{fixing one can break the other.} Forcing every
+group to have the same approval rate means you must approve some people you
+would otherwise reject, and reject some you would otherwise approve. Those
+forced flips are extra errors, and they land on specific individuals.
+
+There is a well-known body of theory saying certain fairness definitions are
+mathematically incompatible. What is much thinner in the literature is
+\textbf{empirical measurement}: if you actually build a model and turn a dial
+from ``optimise group fairness'' toward ``optimise individual fairness,'' what
+happens to each metric, on real data, with real error bars?
+
+\subsection{What is the main objective?}
+
+\begin{keybox}[The one-sentence framing]
+The composite loss is the \textbf{instrument}; the trade-off map is the
+\textbf{contribution}.
+\end{keybox}
+
+We are \emph{not} claiming ``we invented a better fairness algorithm.'' We are
+claiming: ``we built a dial, turned it across three datasets $\times$ two model
+types $\times$ ten random seeds, and here is the empirical map of what the
+trade-off actually looks like.''
+
+Three research questions drive everything:
+
+\begin{description}[leftmargin=3.2em,style=nextline,font=\bfseries\color{accent}]
+\item[RQ1] Is there a \emph{measurable} tension between group fairness
+(DPD/EOD) and individual fairness (GE) when each is optimised directly?
+\item[RQ2] Is the tension consistent across datasets (race/COMPAS, sex/German,
+sex/Adult) and model classes (logistic regression, MLP)?
+\item[RQ3] Where does our composite-loss frontier sit relative to established
+pre-, in-, and post-processing fairness methods?
+\end{description}
+
+\subsection{Why does this problem matter?}
+
+\begin{enumerate}
+\item \textbf{Real deployments must pick one.} A bank or court system
+implementing a ``fairness requirement'' has to choose a definition. If the
+definitions trade off against each other, that choice has a real cost, and
+practitioners deserve to know its size.
+\item \textbf{Regulation is definition-blind.} Rules say ``don't
+discriminate,'' not ``keep demographic parity difference below 0.05.''
+Empirical trade-off maps are what translate a legal requirement into an
+engineering target.
+\item \textbf{Impossibility theorems say ``you can't have both,'' not ``how
+much does each cost.''} Ours is a magnitude study.
+\end{enumerate}
+
+\subsection{What is the overall approach?}
+
+Build a single loss function with two knobs.
+
+\begin{itemize}
+\item $\boldsymbol{\alpha}$ controls how much you care about \emph{accuracy
+versus fairness at all}.
+\item $\boldsymbol{\beta}$ controls, \emph{within} the fairness part, how much
+is group fairness versus individual fairness.
+\end{itemize}
+
+Then sweep a $7\times7$ grid of $(\alpha,\beta)$, training a model at every
+grid point, on three datasets, with two architectures, repeated over ten random
+seeds --- about \textbf{2{,}940 trained models} --- and measure six metrics on
+each. Compare against six established baselines. Test significance with a
+paired non-parametric test across seeds.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 2. TERMS AND CONCEPTS
+\section{Important Terms and Concepts}
+
+\subsection{The basic setup}
+
+\begin{description}[leftmargin=0em,style=nextline,itemsep=5pt]
+
+\item[Binary classification]
+The model outputs one number per person, and you threshold it at $0.5$ to get a
+yes/no decision. All three datasets in this project are binary.
+
+\item[Sensitive attribute (also: protected attribute)]
+The demographic variable that fairness is measured \emph{with respect to}. In
+this project: \code{race} on COMPAS, \code{Sex} on German, \code{sex} on Adult.
+
+\item[Positive class]
+The outcome coded as $1$. We deliberately made this the \emph{adverse} outcome
+on COMPAS and German so the datasets align: COMPAS \code{two\_year\_recid} $=$
+re-offended; German \code{risk} $=1$ means \textbf{bad} credit. Adult breaks the
+pattern --- there $1 =$ income $>$ \$50K, a \emph{good} outcome.
+
+\item[Logit]
+The raw pre-sigmoid score. Our models return logits; the sigmoid is applied
+inside the loss. (This fixed a double-sigmoid bug in the legacy code.)
+
+\item[Sigmoid]
+Squashes a logit into a probability: $\sigma(z) = 1/(1+e^{-z})$.
+
+\item[BCE (Binary Cross-Entropy)]
+The standard accuracy loss for binary classification. Penalises confident wrong
+answers heavily.
+
+\end{description}
+
+\begin{warnbox}[Design choice reviewers will ask about]
+The sensitive attribute is \textbf{left in the feature matrix} and fed to the
+model. This is a legitimate choice (``fairness through awareness'' --- hiding
+the attribute doesn't help because proxies exist), but state it deliberately in
+the paper rather than leaving it implicit.
+\end{warnbox}
+
+\subsection{The models}
+
+\begin{description}[leftmargin=0em,style=nextline,itemsep=5pt]
+\item[Logistic Regression (LR)]
+One linear layer, one output. Simple, interpretable, the field-standard
+fairness baseline.
+
+\item[MLP (Multi-Layer Perceptron), 64--64]
+Input $\to$ 64 $\to$ ReLU $\to$ 64 $\to$ ReLU $\to$ 1. A small neural network.
+Its role is to answer RQ2's ``does this hold for a nonlinear model too?''
+
+\item[ReLU] Activation function, $\max(0,x)$, gives the network nonlinearity.
+
+\item[Adam] The optimiser. Learning rate $0.01$, weight decay $10^{-4}$.
+
+\item[Weight decay (L2 regularisation)]
+Shrinks weights toward zero to prevent overfitting.
+
+\item[Early stopping]
+Stop training when validation loss stops improving. Patience $=20$ epochs, and
+it \emph{deep-copies} the best weights rather than holding a live reference ---
+that was a real bug in the legacy code.
+\end{description}
+
+\begin{warnbox}[Training detail worth stating explicitly]
+The training loop does \textbf{one optimiser step per epoch on the full
+dataset} --- full-batch gradient descent, not mini-batch SGD. With
+\code{num\_epochs=300} that is at most 300 gradient steps. This is a deliberate
+consequence of the loss design (SoftDP needs all groups present in the batch to
+compute a group gap), and it is fine for tabular data of this size. But say it
+explicitly --- reviewers will otherwise assume mini-batching.
+\end{warnbox}
+
+\subsection{The knobs: \texorpdfstring{$\alpha$}{alpha} and
+\texorpdfstring{$\beta$}{beta}}
+
+The whole project lives in this equation:
+\begin{equation}
+\mathcal{L} \;=\; \alpha \cdot \mathrm{BCE}
+\;+\; (1-\alpha)\Big[\,\beta \cdot \mathrm{SoftDP} \;+\; (1-\beta)\cdot \mathrm{SoftGE}\,\Big]
+\label{eq:composite}
+\end{equation}
+
+\begin{center}
+\small
+\begin{tabular}{@{}llp{0.52\textwidth}@{}}
+\toprule
+\textbf{Knob} & \textbf{Value} & \textbf{Meaning} \\
+\midrule
+\multirow{3}{*}{$\alpha$}
+ & $1$   & Pure BCE, no fairness term at all. This is the \textbf{baseline}. \\
+ & $0$   & Fairness only, accuracy ignored $\to$ degenerate models. \\
+ & swept & $\{0,\ 0.005,\ 0.05,\ 0.25,\ 0.5,\ 0.75,\ 1\}$ \\
+\addlinespace
+\multirow{3}{*}{$\beta$}
+ & $1$   & All fairness weight on \textbf{group} fairness (SoftDP). \\
+ & $0$   & All fairness weight on \textbf{individual} fairness (SoftGE). \\
+ & $0.5$ & Equal blend. Same seven swept values. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The log-ish spacing ($0, 0.005, 0.05, 0.25, \ldots$) resolves the region near
+zero, where even small fairness weights already change behaviour.
+
+\begin{keybox}[Why $\beta$ is the important one]
+Sweeping $\beta$ at fixed $\alpha$ holds the \emph{total} fairness pressure
+constant while redistributing it between the two notions. That is exactly the
+comparison needed to isolate a trade-off between them --- any change you see is
+attributable to \emph{which} fairness you asked for, not \emph{how much}.
+\end{keybox}
+
+\subsection{Surrogates --- the key technical trick}
+
+The real fairness metrics require \textbf{hard 0/1 predictions}, which come
+from a threshold, which is a step function, which has \textbf{zero gradient
+everywhere}. You cannot backpropagate through it. So the metrics as normally
+computed cannot be used as a training loss.
+
+The fix: build \textbf{differentiable surrogates} that operate on the raw
+probabilities $p$ instead of thresholded predictions.
+
+\subsubsection{SoftDP --- soft demographic parity}
+\begin{equation}
+\mathrm{SoftDP} \;=\; \max_g \bar{p}_g \;-\; \min_g \bar{p}_g
+\end{equation}
+The largest gap in \emph{mean predicted probability} between any two sensitive
+groups. As probabilities saturate toward $0/1$ this converges to the hard DPD.
+
+\subsubsection{SoftGE --- soft generalized entropy}
+\begin{equation}
+b_i = 1 + p_i - y_i, \qquad
+\mathrm{SoftGE} = \frac{1}{n\,\gamma(\gamma-1)}\sum_i
+\left[\left(\frac{b_i}{\bar b}\right)^{\!\gamma} - 1\right],
+\quad \gamma = 2
+\end{equation}
+
+The \textbf{benefit vector} $b$ is the central idea. For each person,
+$b_i = 1 + \text{prediction} - \text{truth}$:
+
+\begin{center}
+\small
+\begin{tabular}{@{}lcl@{}}
+\toprule
+\textbf{Situation} & $\boldsymbol{b_i}$ & \textbf{Interpretation} \\
+\midrule
+Correct prediction & $1$ & you got what you deserved \\
+False positive     & $2$ & you got \emph{more} than you deserved \\
+False negative     & $0$ & you got \emph{less} than you deserved \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Then measure the \textbf{inequality} of that benefit vector using an economics
+inequality index. If everyone gets $b=1$, inequality is $0$ --- perfectly
+individually fair. The more the errors concentrate, the higher the index.
+
+\begin{example}[Computing the benefit vector and GE(2) by hand]
+Take eight people. True labels
+$y = [1,0,1,0,1,0,1,0]$.
+
+\medskip
+\textbf{Case A --- perfect predictions.} $\hat y = [1,0,1,0,1,0,1,0]$.
+\[ b = [1,1,1,1,1,1,1,1], \quad \bar b = 1, \quad \getwo = 0 \]
+Everyone receives identical benefit, so inequality is exactly zero.
+
+\medskip
+\textbf{Case B --- one false positive} (person 2 predicted $1$, truth $0$).
+$\hat y = [1,\mathbf{1},1,0,1,0,1,0]$.
+\[ b = [1,\mathbf{2},1,1,1,1,1,1], \qquad \bar b = \tfrac{9}{8} = 1.125 \]
+\[
+\getwo = \frac{1}{2}\left[\frac{1}{8}\sum_i\left(\frac{b_i}{1.125}\right)^{2} - 1\right]
+       = \frac{1}{2}\left[\frac{7(0.7901) + 3.1605}{8} - 1\right]
+       = \frac{1.0864 - 1}{2} = \mathbf{0.0432}
+\]
+
+\medskip
+\textbf{Case C --- one false negative} (person 1 predicted $0$, truth $1$).
+$\hat y = [\mathbf{0},0,1,0,1,0,1,0]$.
+\[ b = [\mathbf{0},1,1,1,1,1,1,1], \qquad \bar b = \tfrac{7}{8} = 0.875 \]
+\[
+\getwo = \frac{1}{2}\left[\frac{7(1.30612) + 0}{8} - 1\right]
+       = \frac{1.14286 - 1}{2} = \mathbf{0.0714}
+\]
+
+\medskip
+\textbf{What this teaches:} one error of \emph{either} kind creates inequality,
+but the false negative scores higher ($0.0714$ vs $0.0432$). Denying someone
+what they were owed registers as more unequal than giving someone a windfall.
+All three values were verified against the project's actual
+\file{IndividualFairness.py}.
+\end{example}
+
+\subsubsection{Surrogate validation}
+Because we train on the soft version but report the hard version, we must show
+they track each other. Pearson correlations across all sweep points and seeds:
+
+\begin{center}
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Dataset} & $r(\mathrm{SoftDP},\ \dpdtwo)$ & $r(\mathrm{SoftGE},\ \getwo)$ \\
+\midrule
+COMPAS & $0.794$ & $0.832$ \\
+German & $0.625$ & $0.919$ \\
+Adult  & $0.907$ & $0.923$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+German's SoftDP correlation ($0.625$) is the weak one --- expected, since German
+is tiny ($n=1000$, test split $=200$) so the hard DPD is very noisy.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{surrogate_validation.pdf}
+\caption{Each training surrogate plotted against the hard evaluation metric it
+stands in for, across all 2{,}940 models. Strong positive correlation is what
+licenses training on the soft version and reporting the hard one.}
+\label{fig:guide-surrogate}
+\end{figure}
+
+\subsection{The baseline methods}
+
+Fairness interventions are conventionally sorted into three families. This
+project covers all three.
+
+\begin{center}
+\small
+\begin{tabular}{@{}llp{0.47\textwidth}@{}}
+\toprule
+\textbf{Family} & \textbf{Method} & \textbf{What it does} \\
+\midrule
+Pre-processing & Reweighing &
+Give each training sample weight $w(s,y)=P(s)P(y)/P(s,y)$, making label and
+sensitive attribute independent in the \emph{weighted} training distribution. \\
+\addlinespace
+In-processing & ExponentiatedGradient &
+Reformulates constrained fair classification as a two-player game; returns a
+randomised classifier. Run with Demographic Parity and with Equalized Odds. \\
+\addlinespace
+Post-processing & ThresholdOptimizer &
+Keeps the trained model, picks a \emph{different decision threshold per group}
+to satisfy the constraint. \\
+\addlinespace
+(none) & Random Forest, XGBoost &
+No fairness intervention. These show the accuracy ceiling. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Experimental-protocol terms}
+
+\begin{description}[leftmargin=0em,style=nextline,itemsep=5pt]
+
+\item[Seed]
+A random number controlling the train/val/test split \emph{and} weight
+initialisation \emph{and} stochastic baselines. Ten seeds (0--9) means ten
+independent repeats; we report mean $\pm$ std over them. This is what turns
+single numbers into results with error bars.
+
+\item[Train / validation / test split]
+$60/20/20$, re-drawn per seed. Train fits the model; validation selects
+hyperparameters and triggers early stopping; test is touched \textbf{only} for
+final reporting.
+
+\item[StandardScaler]
+Rescale numeric features to mean $0$, std $1$. Necessary because gradient
+descent behaves badly when features have wildly different scales
+(\code{age} $\approx 40$, \code{capital-gain} $\approx 100{,}000$).
+
+\item[OneHotEncoder(drop='first')]
+Turn a categorical column into binary indicator columns, dropping one to avoid
+perfect collinearity.
+
+\item[Utopia-point model selection]
+Among all $\alpha<1$ sweep points, pick the one minimising distance to the ideal
+corner:
+\[ d = \sqrt{(1-\text{val\_acc})^2 + \text{val\_DPD}_2^2} \]
+Computed on \textbf{validation only}. This is a project-specific choice, not a
+field standard.
+
+\item[Degenerate-predictor guard]
+A model predicting ``no'' for everyone has $\mathrm{DPD}=0$, is perfectly
+``fair,'' and is useless. Any model whose validation positive rate is $<5\%$ or
+$>95\%$ is excluded from selection.
+
+\item[Wilcoxon signed-rank test]
+A paired, non-parametric significance test. \emph{Paired} because seed $k$ for
+the fair model and seed $k$ for the baseline share the same data split.
+\emph{Non-parametric} because with ten samples you cannot credibly assume
+normality.
+
+\item[Holm correction]
+Testing four metrics at once gives four chances to find a fluke. Holm's
+step-down procedure adjusts the $p$-values to control the family-wise error
+rate.
+
+\item[Pareto frontier]
+The set of configurations where you cannot improve accuracy without worsening
+DPD, or vice versa. The ``efficient'' trade-offs.
+
+\end{description}
+
+\begin{example}[Why the degeneracy guard is not cosmetic]
+On COMPAS, seed 0, at $\alpha = 0$ (no accuracy term at all), the trained model
+records:
+\begin{center}
+accuracy $= 0.4526$ \qquad validation positive rate $= 0.9951$
+\end{center}
+The model predicts ``will re-offend'' for $99.5\%$ of people. Its demographic
+parity difference is near zero, because it treats everyone identically ---
+identically badly. Without the $5\%$/$95\%$ guard, model selection would rank
+this as an excellent fair model.
+\end{example}
+
+\subsection{Abbreviations you will use constantly}
+
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{\hspace{2.5em}}ll@{}}
+\toprule
+\textbf{Abbr.} & \textbf{Meaning} & \textbf{Abbr.} & \textbf{Meaning} \\
+\midrule
+LR   & Logistic Regression        & DPD  & Demographic Parity Difference \\
+MLP  & Multi-Layer Perceptron     & EOD  & Equalized Odds Difference \\
+BCE  & Binary Cross-Entropy       & GE   & Generalized Entropy (index) \\
+DP   & Demographic Parity         & RF   & Random Forest \\
+EO   & Equalized Odds             & XGB  & XGBoost \\
+ExpGrad & ExponentiatedGradient   & TPR/FPR & True/False Positive Rate \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\clearpage
+\input{part2_metrics}
+\clearpage
+\input{part3_results}
+
+\end{document}

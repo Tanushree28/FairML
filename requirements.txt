@@ -9,3 +9,4 @@ torch==2.6.0
 scipy==1.17.1
 pytest==9.1.1
 xgboost==3.3.0
+folktables==0.0.12
